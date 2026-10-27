@@ -48,4 +48,15 @@ Kaynaklar: Vikipedi (Batak), joker.games, okeydeyim.net ve masalarda yaygın oyn
 - Puan: her alınan el 1 puan, her tur toplam 13 puan. Klasik/10 katlı puan sistemi, El almaz ve King bu türde yoktur.
 - Oyun, biri bitiş puanına ulaşınca biter; en üstte eşitlik varsa bir tur daha oynanır.
 
+## Eşli Batak (ayar `variant: 'esli'`; 1.5.0)
+
+- İhaleli Batak, iki takımla: **0 ile 2** ve **1 ile 3** numaralı koltuklar eştir (karşılıklı oturanlar). İhale, koz seçimi ve kart atma kuralları ihaleli batakla aynıdır; herkes kendi adına ihale verebilir, eşinin ihalesini geçmek de serbesttir.
+- **Puan takım toplamıdır.** İhaleyi alan oyuncunun takımı, eşiyle birlikte ihale kadar el almalıdır.
+  - Tutarsa takım: klasikte iki oyuncunun aldığı eller toplamı; 10 katlıda `10 × ihale + fazla el`. Tutmazsa: klasikte `−ihale`, 10 katlıda `−10 × ihale`.
+  - Rakip takım: iki oyuncunun aldığı eller toplamı. **Takım olarak en az 1 el** zorunludur; hiç el almazsa `−ihale` (ayar `passerMinTricks`).
+  - Bir takımın iki oyuncusu aynı puanı alır.
+- El almaz ve King bu türde yoktur (ayarlarda açılırsa motor hata verir).
+- Oyun, bir takım bitiş puanına ulaşınca biter; takım puanları eşitse bir tur daha oynanır. `match.winner` kazanan takımın ilk koltuğudur (0 ya da 1), `match.winners` iki koltuğu verir.
+- Bilgisayar eşinin ihalesini geçmez, eşi eli tutarken üstüne çıkmaz.
+
 Açık soru kalmadı.

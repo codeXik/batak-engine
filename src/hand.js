@@ -1,6 +1,6 @@
 import { SUITS, dealHands, isCard, defaultRandom } from './cards.js';
 import { legalCards, trickWinner } from './rules.js';
-import { scoreRound } from './scoring.js';
+import { scoreRound, scoreRoundTeams } from './scoring.js';
 import { withDefaults } from './settings.js';
 import { suitOf } from './cards.js';
 
@@ -70,6 +70,11 @@ export class BatakHand {
 
   get kozmaca() {
     return this.settings.variant === 'kozmaca';
+  }
+
+  // Eşli Batak: seats 0+2 against 1+3.
+  get esli() {
+    return this.settings.variant === 'esli';
   }
 
   // Every field except the hands, the settings and the dealer, copied.
@@ -292,7 +297,9 @@ export class BatakHand {
     if (this.hands.every((x) => x.length === 0)) {
       this.phase = 'done';
       this.kingMade = this.king && this.tricks[this.bidder] === 13;
-      this.scores = this.kozmaca ? this.tricks.slice() : scoreRound({ bidder: this.bidder, bid: this.bid, tricks: this.tricks, elAlmaz: this.elAlmaz }, this.settings);
+      if (this.kozmaca) this.scores = this.tricks.slice();
+      else if (this.esli) this.scores = scoreRoundTeams({ bidder: this.bidder, bid: this.bid, tricks: this.tricks }, this.settings);
+      else this.scores = scoreRound({ bidder: this.bidder, bid: this.bid, tricks: this.tricks, elAlmaz: this.elAlmaz }, this.settings);
     }
     return { trickDone: true, winner, trick: finished.map((t) => ({ ...t })) };
   }

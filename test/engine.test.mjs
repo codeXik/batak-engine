@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeDeck, dealHands, isBadHand } from '../src/cards.js';
 import { legalCards, trickWinner } from '../src/rules.js';
-import { scoreRound } from '../src/scoring.js';
+import { scoreRound, scoreRoundTeams } from '../src/scoring.js';
 import { BatakHand } from '../src/hand.js';
 import { withDefaults } from '../src/settings.js';
 import { BatakMatch } from '../src/match.js';
@@ -465,4 +465,61 @@ test('Koz Maça: save and load in the middle of a round, and a whole match to th
   assert.ok(Math.max(...m.scores) >= 20);
   assert.equal(m.rounds.length, m.scores.reduce((a, b) => a + b, 0) / 13);
   assert.throws(() => withDefaults({ variant: 'eşli' }));
+});
+
+test('Eşli Batak scoring: the team\'s tricks are added, both seats of a team share the score', () => {
+  const classic = withDefaults({ variant: 'esli', scoring: 'classic' });
+  // bidder 1 (team 1+3) bids 6 and the team takes 4 + 3 = 7: made, 7 points; the others took 6
+  assert.deepEqual(scoreRoundTeams({ bidder: 1, bid: 6, tricks: [3, 4, 3, 3] }, classic), [6, 7, 6, 7]);
+  // 2+... bidder 0 bids 7, team takes 3 + 2 = 5: broken (-7); the others took 8
+  assert.deepEqual(scoreRoundTeams({ bidder: 0, bid: 7, tricks: [3, 4, 2, 4] }, classic), [-7, 8, -7, 8]);
+  // the other team takes no trick at all: they lose the bid (the passer rule, for the team)
+  assert.deepEqual(scoreRoundTeams({ bidder: 2, bid: 5, tricks: [7, 0, 6, 0] }, classic), [13, -5, 13, -5]);
+  const x10 = withDefaults({ variant: 'esli', scoring: 'x10' });
+  assert.deepEqual(scoreRoundTeams({ bidder: 0, bid: 6, tricks: [4, 2, 3, 4] }, x10), [61, 6, 61, 6]);
+  assert.deepEqual(scoreRoundTeams({ bidder: 0, bid: 6, tricks: [2, 5, 2, 4] }, x10), [-60, 9, -60, 9]);
+});
+
+test('Eşli Batak: bots play whole rounds, no El almaz or King, team scores agree with the tricks', async () => {
+  const { botStep } = await import('../src/bot.js');
+  assert.throws(() => withDefaults({ variant: 'esli', king: true }));
+  assert.throws(() => withDefaults({ variant: 'esli', elAlmaz: true }));
+  for (const level of ['kolay', 'normal', 'zor']) {
+    for (let seed = 1; seed <= (level === 'zor' ? 3 : 20); seed++) {
+      const h = new BatakHand({ dealer: seed % 4, rng: seeded(seed), settings: { variant: 'esli', scoring: seed % 2 ? 'classic' : 'x10' } });
+      while (h.phase !== 'done') {
+        assert.ok(!h.bidOptions().includes('elalmaz') && !h.bidOptions().includes('king'));
+        botStep(h, { level, rng: seeded(seed + 3), thinkMs: 5 });
+      }
+      assert.deepEqual(h.scores, scoreRoundTeams({ bidder: h.bidder, bid: h.bid, tricks: h.tricks }, h.settings));
+      assert.equal(h.scores[0], h.scores[2]);
+      assert.equal(h.scores[1], h.scores[3]);
+      assert.equal(h.tricks.reduce((a, b) => a + b, 0), 13);
+    }
+  }
+});
+
+test('Eşli Batak: a bot never outbids its own partner; a whole match ends with a winning team; save and load', async () => {
+  const { botStep, botBid } = await import('../src/bot.js');
+  const h = new BatakHand({ dealer: 3, rng: seeded(11), settings: { variant: 'esli' } });
+  h.placeBid(h.turn, 5); // the seat to speak first bids 5
+  const partnerOfBidder = (h.highBidder + 2) % 4;
+  while (h.turn !== partnerOfBidder) h.placeBid(h.turn, 'pass');
+  for (const level of ['kolay', 'normal', 'zor']) assert.equal(botBid(h, partnerOfBidder, { level, thinkMs: 5 }), 'pass');
+  const m = new BatakMatch({ settings: { variant: 'esli', targetScore: 25 }, rng: seeded(4) });
+  let guard = 0;
+  while (!m.over && guard++ < 60) {
+    const hand = m.startRound();
+    if (guard === 2) assert.deepEqual(BatakHand.fromJSON(JSON.parse(JSON.stringify(hand.toJSON()))).toJSON(), hand.toJSON());
+    while (hand.phase !== 'done') botStep(hand, { rng: seeded(guard) });
+    m.finishRound();
+    assert.equal(m.scores[0], m.scores[2]);
+    assert.equal(m.scores[1], m.scores[3]);
+  }
+  assert.ok(m.over, 'the match finishes');
+  assert.equal(m.winners.length, 2);
+  assert.equal((m.winners[0] + 2) % 4, m.winners[1]);
+  assert.ok(Math.max(...m.teamScores) >= 25);
+  const again = BatakMatch.fromJSON(JSON.parse(JSON.stringify(m.toJSON())));
+  assert.deepEqual(again.winners, m.winners);
 });

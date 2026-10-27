@@ -1,6 +1,6 @@
 import { SUITS, suitOf, rankOf, makeDeck, shuffle } from './cards.js';
 import { trickWinner } from './rules.js';
-import { scoreRound } from './scoring.js';
+import { scoreRound, scoreRoundTeams } from './scoring.js';
 import { BatakHand } from './hand.js';
 
 // Computer player. It only looks at its own cards and at what is public (played cards, the table, the bid).
@@ -10,6 +10,10 @@ import { BatakHand } from './hand.js';
 const pick = (list, rng) => list[Math.floor(rng() * list.length)];
 const lowest = (cards) => cards.reduce((a, b) => (rankOf(b) < rankOf(a) ? b : a));
 const highest = (cards) => cards.reduce((a, b) => (rankOf(b) > rankOf(a) ? b : a));
+// Eşli Batak: partners sit opposite each other; a bidder's partner is expected to bring about this many tricks.
+const mateOf = (seat) => (seat + 2) % 4;
+const isEsli = (h) => h.settings.variant === 'esli';
+const MATE_TRICKS = 1.5;
 
 // Rough number of tricks `hand` should win with `trump` as trump.
 export function estimateTricks(hand, trump) {
@@ -58,12 +62,13 @@ export function botBid(h, seat, { level = 'normal', rng = Math.random, thinkMs =
   if (level === 'zor') return zorBid(h, seat, { rng, thinkMs });
   const all = h.bidOptions(seat);
   const { estimate } = bestTrump(h.hands[seat]);
+  if (isEsli(h) && h.highBidder === mateOf(seat)) return 'pass'; // never outbid your own partner
   if (level !== 'kolay') {
     if (all.includes('king') && estimate >= 12.5) return 'king';
     const d = danger(h.hands[seat]);
     if (all.includes('elalmaz') && h.highBidder >= 0 && d.points < 2 && d.shape <= 2) return 'elalmaz';
   }
-  const n = Math.floor(estimate + 0.5) - (level === 'kolay' ? 1 : 0);
+  const n = Math.floor(estimate + 0.5 + (isEsli(h) ? MATE_TRICKS : 0)) - (level === 'kolay' ? 1 : 0);
   const options = all.filter((o) => typeof o === 'number');
   const next = options[0];
   return next !== undefined && n >= next ? next : 'pass';
@@ -97,14 +102,23 @@ export function botCard(h, seat, { level = 'normal', rng = Math.random, thinkMs 
   }
 
   const done = h.tricks.reduce((a, b) => a + b, 0);
-  const bidderNeeds = Math.max(0, h.bid - h.tricks[h.bidder]);
-  const isBidder = seat === h.bidder;
-  const passerNeeds = !isBidder && !h.elAlmaz.includes(seat) && h.tricks[seat] < h.settings.passerMinTricks;
+  const esli = isEsli(h);
+  const mate = mateOf(seat);
+  // Eşli Batak: the bidder's team counts its tricks together, and so does the other team
+  const teamTricks = (x) => h.tricks[x] + (esli ? h.tricks[mateOf(x)] : 0);
+  const bidderNeeds = Math.max(0, h.bid - teamTricks(h.bidder));
+  const isBidder = esli ? seat % 2 === h.bidder % 2 : seat === h.bidder;
+  const passerNeeds = !isBidder && !h.elAlmaz.includes(seat) && teamTricks(seat) < h.settings.passerMinTricks;
   // a bidder always wants more tricks; the others want one for themselves or to break the bidder
   // in Koz Maça (no bidder) every trick is a point, so everybody wants every trick
   let wantWin = h.settings.variant === 'kozmaca' || isBidder || passerNeeds || (bidderNeeds > 0 && 13 - done >= bidderNeeds);
   // a clean El almaz player winning this trick: leave it to them, it breaks their El almaz
   if (table.length > 0 && cleanElAlmaz(h.trick[trickWinner(table, h.trump)].seat)) wantWin = false;
+  // Eşli Batak: when the partner already holds the trick (nothing can still beat it, or I am the last to play), let it be
+  if (esli && table.length > 0) {
+    const w = h.trick[trickWinner(table, h.trump)];
+    if (w.seat === mate && (table.length === 3 || isMaster(w.card))) wantWin = false;
+  }
 
   if (table.length === 0) {
     const masters = legal.filter(isMaster);
@@ -179,7 +193,7 @@ function sampleWorld(h, seat, rng) {
     if (!strict) continue;
     if (h.bidder < 0 || h.bidder === seat) return hands;
     const original = hands[h.bidder].concat(h.plays[h.bidder]);
-    if (estimateTricks(original, h.trump) >= h.bid - 1.2) return hands;
+    if (estimateTricks(original, h.trump) >= h.bid - (isEsli(h) ? 3.5 : 1.2)) return hands;
   }
   return hands;
 }
@@ -244,7 +258,10 @@ export function zorBid(h, seat, { rng = Math.random, thinkMs = 300 } = {}) {
   const all = h.bidOptions(seat);
   const options = all.filter((o) => typeof o === 'number');
   const mine = h.hands[seat];
-  const { suit, estimate } = bestTrump(mine);
+  const { suit, estimate: own } = bestTrump(mine);
+  const esli = isEsli(h);
+  if (esli && h.highBidder === mateOf(seat)) return 'pass'; // never outbid your own partner
+  const estimate = own + (esli ? MATE_TRICKS : 0);
   let bestBid = 'pass';
   let bestValue = PASS_VALUE;
   if (options.length && estimate >= h.settings.minBid - 2.5) {
@@ -256,14 +273,14 @@ export function zorBid(h, seat, { rng = Math.random, thinkMs = 300 } = {}) {
       const hands = dealOthers(mine, seat, rng);
       const c = BatakHand.playing({ dealer: h.dealer, hands, bidder: seat, bid: target, trump: suit, settings: h.settings });
       rollout(c, rng);
-      results.push(c.tricks[seat]);
+      results.push(c.tricks[seat] + (esli ? c.tricks[mateOf(seat)] : 0)); // the team's tricks in Eşli Batak
       worlds++;
     } while (worlds < 400 && (worlds < 20 || now() - start < thinkMs));
     // a King that comes off wins the whole game
     if (all.includes('king') && results.filter((t) => t === 13).length / results.length >= 0.5) return 'king';
     for (const b of options) {
       let sum = 0;
-      for (const t of results) sum += scoreRound({ bidder: 0, bid: b, tricks: [t, 0, 0, 0] }, h.settings)[0];
+      for (const t of results) sum += (esli ? scoreRoundTeams : scoreRound)({ bidder: 0, bid: b, tricks: [t, 0, 0, 0] }, h.settings)[0];
       const value = sum / results.length;
       if (value > bestValue) { bestValue = value; bestBid = b; }
     }

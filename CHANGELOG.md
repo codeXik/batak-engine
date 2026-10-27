@@ -1,5 +1,11 @@
 # Değişiklik kaydı
 
+## 1.5.0 — 27 Ekim 2026
+
+- Yeni oyun türü **Eşli Batak**: ayar `variant: 'esli'`. Karşılıklı koltuklar eş (0+2 ve 1+3), ihaleli oynanır, puan takım toplamıdır (ihaleci takım eşiyle birlikte ihale kadar el almalı; rakip takım için "en az 1 el" takım olarak sayılır). El almaz ve King bu türde yok.
+- Yeni: `scoreRoundTeams`, `match.teamScores`, `match.winners`; oyun, bir takım bitiş puanına ulaşınca biter.
+- Bilgisayar eşli oynar: eşinin ihalesini geçmez, ihaleyi eşiyle birlikte hesaplar, eşi eli tutarken üstüne çıkmaz.
+
 ## 1.4.0 — 27 Ekim 2026
 
 - Yeni oyun türü **Koz Maça**: ayar `variant: 'kozmaca'`. İhale yok, koz hep maça, tur doğrudan kart atmayla başlar, her alınan el 1 puan (tur başına toplam 13). Varsayılan `variant: 'ihaleli'`; mevcut oyunlar etkilenmez.

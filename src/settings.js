@@ -1,6 +1,6 @@
 // Every rule that differs between tables is a setting; these are the agreed defaults (docs/KURALLAR.md).
 export const DEFAULT_SETTINGS = {
-  variant: 'ihaleli', // 'ihaleli' (bidding batak) or 'kozmaca' (spades always trump, no bidding, one point per trick)
+  variant: 'ihaleli', // 'ihaleli' (bidding batak), 'kozmaca' (spades always trump, no bidding, one point per trick) or 'esli' (bidding batak in two teams: seats 0+2 against 1+3)
   minBid: 5,
   allPassBid: 4, // everybody passes: the first bidder gets this bid
   mustOvertake: true, // must beat the best card of the led suit when possible
@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS = {
 
 const isInt = (x, lo, hi) => Number.isInteger(x) && x >= lo && x <= hi;
 const CHECKS = {
-  variant: (x) => x === 'ihaleli' || x === 'kozmaca',
+  variant: (x) => x === 'ihaleli' || x === 'kozmaca' || x === 'esli',
   minBid: (x) => isInt(x, 1, 13),
   allPassBid: (x) => isInt(x, 1, 13),
   mustOvertake: (x) => typeof x === 'boolean',
@@ -45,5 +45,6 @@ export function withDefaults(settings = {}) {
     if (!CHECKS[key]) throw new Error(`Unknown setting: ${key}`);
     if (!CHECKS[key](value)) throw new Error(`Bad value for setting ${key}: ${value}`);
   }
+  if (out.variant === 'esli' && (out.elAlmaz || out.king)) throw new Error('El almaz and King are not played in Eşli Batak');
   return out;
 }

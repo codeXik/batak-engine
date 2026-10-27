@@ -23,6 +23,17 @@ export class BatakMatch {
     return this.winner >= 0;
   }
 
+  // Eşli Batak: the two team scores [seats 0+2, seats 1+3].
+  get teamScores() {
+    return [this.scores[0], this.scores[1]];
+  }
+
+  // The seats of the winning team (Eşli Batak) or of the winner alone; [] while the match is running.
+  get winners() {
+    if (!this.over) return [];
+    return this.settings.variant === 'esli' ? [this.winner, this.winner + 2] : [this.winner];
+  }
+
   // Seats from first to last place: [{ seat, score, place }]; equal scores share a place.
   get standings() {
     const order = [0, 1, 2, 3].sort((a, b) => this.scores[b] - this.scores[a] || a - b);
@@ -51,6 +62,10 @@ export class BatakMatch {
     this.dealer = (this.dealer + 1) % 4;
     if (h.kingMade) {
       this.winner = h.bidder;
+    } else if (this.settings.variant === 'esli') {
+      // two teams (seats 0+2, 1+3) share their score; `winner` is the first seat of the winning team
+      const [a, b] = this.teamScores;
+      if (Math.max(a, b) >= this.settings.targetScore && a !== b) this.winner = a > b ? 0 : 1;
     } else {
       const top = Math.max(...this.scores);
       // a tie at the top (target reached) means one more round
