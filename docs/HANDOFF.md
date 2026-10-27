@@ -1,5 +1,10 @@
 # HANDOFF — devam kaydı
 
+## 27 Ekim 2026 — Belgeler düzeltildi (1.3.1)
+
+- README baştan, düzgün ve sade Türkçeyle yazıldı. KURALLAR'daki kaynak satırı temizlendi.
+- Yerel çalışma notu dosyası depodan çıkarıldı; yalnız bu bilgisayarda durur.
+
 ## 27 Ekim 2026 — Çevrim içi oyuna hazırlık (1.3.0)
 
 - Kullanıcı: batak98'de de tavla98 ve chesse98'deki gibi çevrim içi oyun olacak. Motor buna göre hazırlandı (tavla98 `server/rooms.js` örnek alındı: sunucu hakem, hata kodu dönen hamleler, hamle numarası).

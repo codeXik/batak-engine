@@ -1,5 +1,9 @@
 # Değişiklik kaydı
 
+## 1.3.1 — 27 Ekim 2026
+
+- README baştan, düzgün Türkçeyle yazıldı; kural belgesindeki kaynak satırı düzeltildi. Kodda değişiklik yok.
+
 ## 1.3.0 — 27 Ekim 2026
 
 - Yeni: çevrim içi oyun için tek giriş noktası `act(koltuk, hamle)`; hiç hata fırlatmaz, hata kodu döner.
@@ -24,7 +28,7 @@
 
 - Yeni: `BatakMatch` (bütün oyun: bitiş puanına kadar turlar, dağıtıcı sırayla ilerler, eşitlikte bir tur daha).
 - Yeni ayarlar: `elAlmaz` / `elAlmazPoints` ("El almaz" ilanı, +50 / −50) ve `king` (13 el ilanı, tutarsa oyunu kazanır). Varsayılan kapalı.
-- README baştan, düzgün Türkçeyle yazıldı.
+- README yeniden yazıldı.
 
 ## 1.0.0 — 27 Ekim 2026
 
