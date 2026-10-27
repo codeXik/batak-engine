@@ -267,3 +267,97 @@ test('match: whole matches of bots (including El almaz and King on) finish', asy
     assert.ok(match.scores[match.winner] === Math.max(...match.scores) || match.rounds.at(-1).king);
   }
 });
+
+test('bad settings and bad hands are refused', () => {
+  assert.throws(() => new BatakHand({ settings: { minBid: 20 } }), /minBid/);
+  assert.throws(() => new BatakHand({ settings: { scoring: 'x5' } }), /scoring/);
+  assert.throws(() => new BatakHand({ settings: { kozz: true } }), /Unknown setting/);
+  assert.throws(() => new BatakMatch({ settings: { targetScore: 0 } }), /targetScore/);
+  assert.throws(() => new BatakHand({ hands: [['S2'], ['S2'], [], []] }), /twice/);
+  assert.throws(() => new BatakHand({ hands: [['S1'], [], [], []] }), /Not a card/);
+  assert.throws(() => new BatakHand({ hands: [[], [], []] }), /4 lists/);
+  assert.throws(() => new BatakHand({ dealer: 4 }), /Dealer/);
+});
+
+test('auction log, finished tricks and the last trick are kept', () => {
+  const h = new BatakHand({ dealer: 0, rng: seeded(51) });
+  h.placeBid(1, 5); h.placeBid(2, 'pass'); h.placeBid(3, 6); h.placeBid(0, 'pass'); h.placeBid(1, 'pass');
+  assert.deepEqual(h.auction.map((a) => a.bid), [5, 'pass', 6, 'pass', 'pass']);
+  assert.deepEqual(h.auction.map((a) => a.seat), [1, 2, 3, 0, 1]);
+  h.chooseTrump(3, 'S');
+  assert.equal(h.lastTrick, null);
+  while (h.phase === 'play') h.playCard(h.turn, h.legalCards()[0]);
+  assert.equal(h.history.length, 13);
+  assert.equal(h.history[0].leader, 3);
+  assert.deepEqual(h.history.map((t) => t.winner).reduce((n, w) => (n[w]++, n), [0, 0, 0, 0]), h.tricks);
+  for (let i = 1; i < 13; i++) assert.equal(h.history[i].leader, h.history[i - 1].winner);
+  assert.deepEqual(h.lastTrick, h.history[12]);
+});
+
+test('save and load: a round and a match go on exactly as before', async () => {
+  const { botStep } = await import('../src/bot.js');
+  const a = new BatakHand({ dealer: 1, rng: seeded(61), settings: { elAlmaz: true } });
+  const r1 = seeded(62);
+  while (a.phase !== 'play' || a.played.length < 18) botStep(a, { rng: r1 });
+  const b = BatakHand.fromJSON(JSON.parse(JSON.stringify(a)));
+  assert.deepEqual(b.toJSON(), a.toJSON());
+  const ra = seeded(63);
+  const rb = seeded(63);
+  while (a.phase !== 'done') { botStep(a, { rng: ra }); botStep(b, { rng: rb }); }
+  assert.deepEqual(b.scores, a.scores);
+  assert.deepEqual(b.history, a.history);
+  assert.throws(() => BatakHand.fromJSON({ version: 99 }), /format/);
+  const broken = JSON.parse(JSON.stringify(a));
+  broken.plays[0][0] = broken.plays[1][0];
+  assert.throws(() => BatakHand.fromJSON(broken), /twice/);
+
+  const m = new BatakMatch({ rng: seeded(64), settings: { targetScore: 1000 } });
+  for (let i = 0; i < 2; i++) {
+    const h = m.startRound();
+    while (h.phase !== 'done') botStep(h, { rng: r1 });
+    m.finishRound();
+  }
+  const h = m.startRound();
+  botStep(h, { rng: r1 });
+  const m2 = BatakMatch.fromJSON(JSON.parse(JSON.stringify(m)), { rng: seeded(65) });
+  assert.deepEqual(m2.toJSON(), m.toJSON());
+  assert.throws(() => m2.startRound(), /not finished/);
+  while (m2.hand.phase !== 'done') botStep(m2.hand, { rng: r1 });
+  m2.finishRound();
+  assert.equal(m2.rounds.length, 3);
+  assert.deepEqual(m2.standings.map((x) => x.score), m2.scores.slice().sort((x, y) => y - x));
+});
+
+test('a seat view shows only its own cards; a clone keeps King', () => {
+  const h = new BatakHand({ dealer: 0, rng: seeded(71) });
+  const v = h.view(1);
+  assert.deepEqual(v.hand, h.hands[1]);
+  assert.deepEqual(v.handSizes, [13, 13, 13, 13]);
+  assert.equal(v.hands, undefined);
+  for (const c of h.hands[2]) assert.ok(!JSON.stringify(v).includes(`"${c}"`), 'another seat\'s card is hidden');
+  assert.deepEqual(v.bidOptions, h.bidOptions(1));
+  h.king = true; h.kingMade = true;
+  assert.equal(h.clone().kingMade, true);
+});
+
+test('bot: an El almaz player ducks, declares El almaz with a hopeless hand, says King with all 13', async () => {
+  const { botCard, botBid } = await import('../src/bot.js');
+  const h = new BatakHand({ dealer: 0, hands: [['H10', 'C2'], ['H5', 'H9', 'C14'], ['D4', 'D5'], ['C9', 'C8']], settings: { elAlmaz: true } });
+  Object.assign(h, { phase: 'play', bidder: 0, bid: 5, trump: 'S', turn: 0, elAlmaz: [1] });
+  h.playCard(0, 'H10');
+  assert.equal(botCard(h, 1), 'H9', 'keeps the clean El almaz: highest card that still loses');
+
+  const weak = ['S2', 'S3', 'S4', 'H2', 'H3', 'H4', 'D2', 'D3', 'D4', 'C2', 'C3', 'C5', 'C6'];
+  const rest = makeDeck().filter((c) => !weak.includes(c));
+  const deal = [rest.slice(0, 13), weak, rest.slice(13, 26), rest.slice(26, 39)];
+  const e = new BatakHand({ dealer: 3, hands: deal, settings: { elAlmaz: true } });
+  e.placeBid(0, 5);
+  assert.equal(botBid(e, 1), 'elalmaz');
+  assert.equal(botBid(e, 1, { level: 'zor', rng: seeded(72), thinkMs: 5 }), 'elalmaz');
+
+  const spades = makeDeck().filter((c) => c[0] === 'S');
+  const others = makeDeck().filter((c) => c[0] !== 'S');
+  const k = new BatakHand({ dealer: 0, hands: [others.slice(0, 13), spades, others.slice(13, 26), others.slice(26)], settings: { king: true } });
+  assert.equal(botBid(k, 1), 'king');
+  assert.equal(botBid(k, 1, { level: 'zor', rng: seeded(73), thinkMs: 5 }), 'king');
+});

@@ -17,4 +17,31 @@ export const DEFAULT_SETTINGS = {
   king: false, // a bidder may declare all 13 tricks (bid 13): made = wins the match
 };
 
-export const withDefaults = (settings = {}) => ({ ...DEFAULT_SETTINGS, ...settings });
+const isInt = (x, lo, hi) => Number.isInteger(x) && x >= lo && x <= hi;
+const CHECKS = {
+  minBid: (x) => isInt(x, 1, 13),
+  allPassBid: (x) => isInt(x, 1, 13),
+  mustOvertake: (x) => typeof x === 'boolean',
+  mustOvertrump: (x) => typeof x === 'boolean',
+  scoring: (x) => x === 'x10' || x === 'classic',
+  multiplier: (x) => isInt(x, 1, 1000),
+  passerMinTricks: (x) => isInt(x, 0, 13),
+  passerPenalty: (x) => isInt(x, 0, 1000),
+  threeOverBusts: (x) => typeof x === 'boolean',
+  redealBadHand: (x) => typeof x === 'boolean',
+  maxRedeals: (x) => isInt(x, 0, 100),
+  targetScore: (x) => isInt(x, 1, 100000),
+  elAlmaz: (x) => typeof x === 'boolean',
+  elAlmazPoints: (x) => isInt(x, 0, 100000),
+  king: (x) => typeof x === 'boolean',
+};
+
+// Fills in the defaults and throws on an unknown setting or a value out of range.
+export function withDefaults(settings = {}) {
+  const out = { ...DEFAULT_SETTINGS, ...settings };
+  for (const [key, value] of Object.entries(out)) {
+    if (!CHECKS[key]) throw new Error(`Unknown setting: ${key}`);
+    if (!CHECKS[key](value)) throw new Error(`Bad value for setting ${key}: ${value}`);
+  }
+  return out;
+}

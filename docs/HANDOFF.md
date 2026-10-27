@@ -1,5 +1,11 @@
 # HANDOFF — devam kaydı
 
+## 27 Ekim 2026 — Eksikler tamamlandı (1.2.0)
+
+- Eklendi: kaydet/yükle, ihale ve el geçmişi, son el, sıralama, oyuncu görünümü, ayar ve dağıtım denetimi. Bilgisayar El almaz ve King diyor; El almaz hatası düzeltildi. `npm test` 24 test geçti.
+- Denendi, alınmadı: zor bilgisayarın "kendi puanı yerine ötekilerden farkını" düşünmesi. Ölçümde puanı düşürdü (300 tur: 20,3'e karşı 24,1), eski hâli kaldı.
+- Kural değişikliği yapılmadı. Hâlâ yok: Eşli Batak (kullanıcı kararıyla sonraya).
+
 ## 27 Ekim 2026 — El almaz, King, bütün oyun (1.1.0)
 
 - Eklendi: El almaz, King, `BatakMatch` (bitiş puanı 51). `npm test` 19 test geçti. README Türkçesi baştan yazıldı.

@@ -4,6 +4,7 @@ export const SUIT_NAMES_TR = { S: 'Maça', H: 'Kupa', D: 'Karo', C: 'Sinek' };
 
 export const suitOf = (card) => card[0];
 export const rankOf = (card) => Number(card.slice(1));
+export const isCard = (card) => typeof card === 'string' && /^[SHDC](?:[2-9]|1[0-4])$/.test(card);
 
 export function makeDeck() {
   const deck = [];

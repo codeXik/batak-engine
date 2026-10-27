@@ -1,27 +1,38 @@
 import { BatakHand } from './hand.js';
 import { withDefaults } from './settings.js';
 
+const SAVE_VERSION = 1;
+
 // A whole game: rounds are played until somebody reaches settings.targetScore.
 // The dealer moves one seat per round (the same direction as the play). A successful King wins at once.
 export class BatakMatch {
   constructor({ settings, rng = Math.random, dealer = 0 } = {}) {
+    if (!Number.isInteger(dealer) || dealer < 0 || dealer > 3) throw new Error('Dealer must be a seat 0..3');
     this.settings = withDefaults(settings);
     this.rng = rng;
     this.dealer = dealer;
     this.scores = [0, 0, 0, 0];
-    this.rounds = []; // [{ dealer, bidder, bid, tricks, scores, king }]
+    this.rounds = []; // [{ dealer, bidder, bid, trump, tricks, scores, elAlmaz, king }]
     this.winner = -1;
     this.hand = null;
+    this.counted = false; // the current round's scores are already added
   }
 
   get over() {
     return this.winner >= 0;
   }
 
+  // Seats from first to last place: [{ seat, score, place }]; equal scores share a place.
+  get standings() {
+    const order = [0, 1, 2, 3].sort((a, b) => this.scores[b] - this.scores[a] || a - b);
+    return order.map((seat) => ({ seat, score: this.scores[seat], place: 1 + this.scores.filter((s) => s > this.scores[seat]).length }));
+  }
+
   startRound() {
     if (this.over) throw new Error('The match is over');
-    if (this.hand && this.hand.phase !== 'done') throw new Error('The round is not finished');
+    if (this.hand && !this.counted) throw new Error('The round is not finished');
     this.hand = new BatakHand({ dealer: this.dealer, rng: this.rng, settings: this.settings });
+    this.counted = false;
     return this.hand;
   }
 
@@ -29,11 +40,12 @@ export class BatakMatch {
   finishRound() {
     const h = this.hand;
     if (!h || h.phase !== 'done') throw new Error('The round is not finished');
-    if (this.rounds.length && this.rounds[this.rounds.length - 1].hand === h) throw new Error('Round already counted');
+    if (this.counted) throw new Error('Round already counted');
+    this.counted = true;
     h.scores.forEach((x, i) => (this.scores[i] += x));
     this.rounds.push({
-      hand: h, dealer: this.dealer, bidder: h.bidder, bid: h.bid, tricks: h.tricks.slice(),
-      scores: h.scores.slice(), king: h.kingMade,
+      dealer: this.dealer, bidder: h.bidder, bid: h.bid, trump: h.trump, tricks: h.tricks.slice(),
+      scores: h.scores.slice(), elAlmaz: h.elAlmaz.slice(), king: h.kingMade,
     });
     this.dealer = (this.dealer + 1) % 4;
     if (h.kingMade) {
@@ -46,5 +58,23 @@ export class BatakMatch {
       }
     }
     return { over: this.over, winner: this.winner, scores: this.scores.slice() };
+  }
+
+  // Plain object (JSON safe) with the whole match, the round in progress included.
+  toJSON() {
+    return {
+      version: SAVE_VERSION, settings: { ...this.settings }, dealer: this.dealer, scores: this.scores.slice(),
+      rounds: this.rounds.map((r) => ({ ...r, tricks: r.tricks.slice(), scores: r.scores.slice(), elAlmaz: r.elAlmaz.slice() })),
+      winner: this.winner, counted: this.counted, hand: this.hand && this.hand.toJSON(),
+    };
+  }
+
+  static fromJSON(data, { rng = Math.random } = {}) {
+    if (!data || data.version !== SAVE_VERSION) throw new Error('Unknown save format');
+    const m = new BatakMatch({ settings: data.settings, rng, dealer: data.dealer });
+    const copy = JSON.parse(JSON.stringify({ scores: data.scores, rounds: data.rounds }));
+    Object.assign(m, { scores: copy.scores, rounds: copy.rounds, winner: data.winner, counted: data.counted });
+    m.hand = data.hand ? BatakHand.fromJSON(data.hand) : null;
+    return m;
   }
 }

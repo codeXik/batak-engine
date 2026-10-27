@@ -58,6 +58,32 @@ Kurala aykırı her hamlede (sırası olmayan oyuncu, elinde olmayan kart, geçe
 
 Tur bitince `el.scores` her koltuğun tur puanını, `el.tricks` aldığı el sayısını, `el.bidder` ve `el.bid` ihaleciyi ve teklifini gösterir.
 
+Ekranda göstermek için geçmiş de tutulur:
+
+| Bilgi | Nerede |
+| --- | --- |
+| İhalede kim ne dedi (sırasıyla) | `el.auction` (örnek: `[{ seat: 1, bid: 5 }, { seat: 2, bid: 'pass' }]`) |
+| Biten eller (kim açtı, hangi kartlar, kim aldı) | `el.history` |
+| Son biten el ("son eli göster") | `el.lastTrick` |
+| Yerdeki kartlar | `el.trick` |
+
+## Kaydetme ve yükleme
+
+Oyun her an metne çevrilip saklanabilir, sonra kaldığı yerden sürer (örneğin eklenti penceresi kapanıp açıldığında):
+
+```js
+const kayit = JSON.stringify(oyun);                       // BatakMatch ya da BatakHand
+const oyun2 = BatakMatch.fromJSON(JSON.parse(kayit));     // tek tur için BatakHand.fromJSON
+```
+
+Bozuk ya da tutarsız kayıt (aynı kart iki yerde, bilinmeyen biçim) yüklenmez, hata verir.
+
+## Oyuncu görünümü
+
+`el.view(koltuk)` yalnız o koltuğun görmesi gerekenleri verir: kendi kartları, ötekilerin kaç kartı kaldığı, yerdeki kartlar, geçmiş, puanlar, atabileceği kartlar ve verebileceği teklifler. Rakiplerin kartları içinde yoktur; arayüz bunu kullanırsa kartlar yanlışlıkla görünmez.
+
+Yanlış ayar (bilinmeyen ad, aralık dışı değer) ve yanlış dağıtım (aynı kart iki kez, geçersiz kart) verilirse motor hata verir.
+
 ## Bütün oyun
 
 `BatakMatch`, turları bitiş puanına kadar sürdürür. Dağıtıcı her turda bir koltuk ilerler; biri bitiş puanına (varsayılan 51) ulaşınca oyun biter ve en yüksek puanlı kazanır. En üstte eşitlik varsa bir tur daha oynanır.
@@ -73,6 +99,8 @@ while (!oyun.over) {
 }
 console.log(oyun.winner, oyun.scores);
 ```
+
+`oyun.standings` sıralamayı verir (`[{ seat, score, place }]`, eşit puanlılar aynı sırayı paylaşır). `oyun.rounds` her turun özetidir: dağıtıcı, ihaleci, ihale, koz, alınan eller, puanlar.
 
 ## Kurallar
 
@@ -116,6 +144,8 @@ Kuralların tamamı [docs/KURALLAR.md](docs/KURALLAR.md) dosyasındadır. Özet:
 - **kolay:** Acemi gibi oynar, ara sıra rastgele kart atar.
 - **normal:** Elini değerlendirerek ihale ve koz seçer, kart atarken en uygun kartı bulmaya çalışır.
 - **zor:** Oynanan kartları sayar, kimin hangi renkten bittiğini izler ve ihaleciyi ihale kadar güçlü bir elle düşünür. Sonra kalan kartların olası dağılımlarını oyun sonuna kadar oynatıp en iyi kartı ve ihaleyi seçer. `thinkMs` ile düşünme süresi (milisaniye) verilir, süre arttıkça oyun güçlenir.
+
+Ayarda açıksa normal ve zor seviye El almaz ve King de der: El almaz'ı yalnız başkası teklif verdikten sonra ve el alma ihtimali çok düşük bir elle der; King'i 13 eli alabilecek bir elle der. El almaz diyen bilgisayar hiç el almamaya çalışır; ötekiler de El almaz oyuncusunun aldığı ele karışmaz.
 
 Zor seviye düşünürken yarım saniye kadar işlemciyi doldurur. Tarayıcıda ekranın donmaması için `botStep`'i bir Web Worker içinde çalıştırın.
 

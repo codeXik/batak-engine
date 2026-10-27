@@ -1,17 +1,36 @@
-import { SUITS, dealHands } from './cards.js';
+import { SUITS, dealHands, isCard } from './cards.js';
 import { legalCards, trickWinner } from './rules.js';
 import { scoreRound } from './scoring.js';
 import { withDefaults } from './settings.js';
 import { suitOf } from './cards.js';
+
+const SAVE_VERSION = 1;
+
+function checkHands(hands) {
+  if (!Array.isArray(hands) || hands.length !== 4 || !hands.every(Array.isArray)) throw new Error('Hands must be 4 lists of cards');
+  const seen = new Set();
+  for (const hand of hands) {
+    if (hand.length > 13) throw new Error('A hand has more than 13 cards');
+    for (const c of hand) {
+      if (!isCard(c)) throw new Error(`Not a card: ${c}`);
+      if (seen.has(c)) throw new Error(`Card dealt twice: ${c}`);
+      seen.add(c);
+    }
+  }
+}
+
+const copyTrick = (t) => ({ leader: t.leader, cards: t.cards.map((x) => ({ ...x })), winner: t.winner });
 
 // One round of batak for 4 seats (0..3). Play goes in increasing seat order (counter-clockwise at the table);
 // the player to the dealer's right is therefore (dealer + 1) % 4 and speaks first.
 // Phases: 'bidding' -> 'trump' -> 'play' -> 'done'. Every illegal action throws.
 export class BatakHand {
   constructor({ dealer = 0, hands, rng = Math.random, settings } = {}) {
+    if (!Number.isInteger(dealer) || dealer < 0 || dealer > 3) throw new Error('Dealer must be a seat 0..3');
     this.settings = withDefaults(settings);
     this.dealer = dealer;
     if (hands) {
+      checkHands(hands);
       this.hands = hands.map((h) => h.slice());
       this.redeals = 0;
     } else {
@@ -23,6 +42,7 @@ export class BatakHand {
     this.turn = (dealer + 1) % 4;
     this.firstBidder = this.turn;
     this.bids = [null, null, null, null]; // null = not spoken yet, 'pass' or a number
+    this.auction = []; // every call in order: [{ seat, bid }], bid = a number, 'pass', 'elalmaz' or 'king'
     this.highBid = 0;
     this.highBidder = -1;
     this.bidder = -1;
@@ -30,6 +50,7 @@ export class BatakHand {
     this.trump = null;
     this.trumpBroken = false;
     this.trick = []; // [{ seat, card }]
+    this.history = []; // finished tricks: [{ leader, cards: [{ seat, card }], winner }]
     this.tricks = [0, 0, 0, 0];
     this.played = [];
     this.plays = [[], [], [], []]; // cards each seat has played so far (public)
@@ -40,18 +61,58 @@ export class BatakHand {
     this.scores = null;
   }
 
+  // Every field except the hands, the settings and the dealer, copied.
+  #state() {
+    return {
+      redeals: this.redeals, phase: this.phase, turn: this.turn, firstBidder: this.firstBidder, bids: this.bids.slice(),
+      auction: this.auction.map((a) => ({ ...a })), highBid: this.highBid, highBidder: this.highBidder,
+      bidder: this.bidder, bid: this.bid, trump: this.trump, trumpBroken: this.trumpBroken,
+      trick: this.trick.map((t) => ({ ...t })), history: this.history.map(copyTrick), tricks: this.tricks.slice(),
+      played: this.played.slice(), plays: this.plays.map((p) => p.slice()), elAlmaz: this.elAlmaz.slice(),
+      king: this.king, kingMade: this.kingMade, scores: this.scores && this.scores.slice(),
+    };
+  }
+
   // Copy of the round, optionally with other hands (the computer's "what if" worlds).
   clone(hands = this.hands) {
     const c = new BatakHand({ dealer: this.dealer, hands, settings: this.settings });
-    Object.assign(c, {
-      phase: this.phase, turn: this.turn, firstBidder: this.firstBidder, bids: this.bids.slice(),
-      highBid: this.highBid, highBidder: this.highBidder, bidder: this.bidder, bid: this.bid,
-      trump: this.trump, trumpBroken: this.trumpBroken, redeals: this.redeals, elAlmaz: this.elAlmaz.slice(), king: this.king,
-      trick: this.trick.map((t) => ({ ...t })), tricks: this.tricks.slice(), played: this.played.slice(),
-      plays: this.plays.map((p) => p.slice()), voids: this.voids.map((v) => new Set(v)),
-      scores: this.scores && this.scores.slice(),
-    });
+    Object.assign(c, this.#state(), { voids: this.voids.map((v) => new Set(v)) });
     return c;
+  }
+
+  // Plain object (JSON safe) holding the whole round, for saving a game and loading it later.
+  toJSON() {
+    return {
+      version: SAVE_VERSION, settings: { ...this.settings }, dealer: this.dealer, hands: this.hands.map((h) => h.slice()),
+      ...this.#state(), voids: this.voids.map((v) => [...v]),
+    };
+  }
+
+  static fromJSON(data) {
+    if (!data || data.version !== SAVE_VERSION) throw new Error('Unknown save format');
+    // every card must be in exactly one place: a hand, a seat's played cards, or the table
+    const all = data.hands.map((h, s) => h.concat(data.plays[s]));
+    checkHands(all);
+    const h = new BatakHand({ dealer: data.dealer, hands: data.hands, settings: data.settings });
+    const { version, settings, dealer, hands, voids, ...rest } = data;
+    Object.assign(h, rest, { voids: voids.map((v) => new Set(v)) });
+    Object.assign(h, h.#state()); // detach from the caller's arrays
+    return h;
+  }
+
+  // What `seat` is allowed to see: its own cards, how many cards the others hold, and everything public.
+  view(seat) {
+    const { version, hands, ...pub } = this.toJSON();
+    return {
+      ...pub, seat, hand: this.hands[seat].slice(), handSizes: this.hands.map((h) => h.length),
+      lastTrick: this.lastTrick, legal: this.legalCards(seat), bidOptions: this.bidOptions(seat),
+    };
+  }
+
+  // The trick finished most recently (null before the first one).
+  get lastTrick() {
+    const t = this.history[this.history.length - 1];
+    return t ? copyTrick(t) : null;
   }
 
   // A round that is already in the play phase (used to simulate a round before it exists).
@@ -102,6 +163,7 @@ export class BatakHand {
       this.highBid = value;
       this.highBidder = seat;
     }
+    this.auction.push({ seat, bid: value });
     this.#advanceBidding();
   }
 
@@ -158,13 +220,14 @@ export class BatakHand {
     const winner = this.trick[win].seat;
     this.tricks[winner]++;
     const finished = this.trick;
+    this.history.push({ leader: finished[0].seat, cards: finished, winner });
     this.trick = [];
     this.turn = winner;
-    if (this.played.length === 52) {
+    if (this.hands.every((x) => x.length === 0)) {
       this.phase = 'done';
       this.kingMade = this.king && this.tricks[this.bidder] === 13;
       this.scores = scoreRound({ bidder: this.bidder, bid: this.bid, tricks: this.tricks, elAlmaz: this.elAlmaz }, this.settings);
     }
-    return { trickDone: true, winner, trick: finished };
+    return { trickDone: true, winner, trick: finished.map((t) => ({ ...t })) };
   }
 }

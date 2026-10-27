@@ -9,6 +9,7 @@ import { BatakHand } from './hand.js';
 
 const pick = (list, rng) => list[Math.floor(rng() * list.length)];
 const lowest = (cards) => cards.reduce((a, b) => (rankOf(b) < rankOf(a) ? b : a));
+const highest = (cards) => cards.reduce((a, b) => (rankOf(b) > rankOf(a) ? b : a));
 
 // Rough number of tricks `hand` should win with `trump` as trump.
 export function estimateTricks(hand, trump) {
@@ -45,11 +46,25 @@ export function bestTrump(hand) {
   return { suit: best, estimate: bestEst };
 }
 
+// How likely a hand is to take a trick: high cards count, an uneven hand (long or short suits) is worse.
+function danger(hand) {
+  let d = 0;
+  for (const c of hand) d += { 14: 4, 13: 2.5, 12: 1.5, 11: 0.8, 10: 0.4 }[rankOf(c)] || 0;
+  const lens = SUITS.map((s) => hand.filter((c) => suitOf(c) === s).length);
+  return { points: d, shape: Math.max(...lens) - Math.min(...lens) };
+}
+
 export function botBid(h, seat, { level = 'normal', rng = Math.random, thinkMs = 300 } = {}) {
   if (level === 'zor') return zorBid(h, seat, { rng, thinkMs });
+  const all = h.bidOptions(seat);
   const { estimate } = bestTrump(h.hands[seat]);
+  if (level !== 'kolay') {
+    if (all.includes('king') && estimate >= 12.5) return 'king';
+    const d = danger(h.hands[seat]);
+    if (all.includes('elalmaz') && h.highBidder >= 0 && d.points < 2 && d.shape <= 2) return 'elalmaz';
+  }
   const n = Math.floor(estimate + 0.5) - (level === 'kolay' ? 1 : 0);
-  const options = h.bidOptions(seat).filter((o) => typeof o === 'number');
+  const options = all.filter((o) => typeof o === 'number');
   const next = options[0];
   return next !== undefined && n >= next ? next : 'pass';
 }
@@ -69,16 +84,26 @@ export function botCard(h, seat, { level = 'normal', rng = Math.random, thinkMs 
   const unseen = makeDeck().filter((c) => !mine.has(c) && !played.has(c));
   const isMaster = (c) => !unseen.some((u) => suitOf(u) === suitOf(c) && rankOf(u) > rankOf(c));
 
-  const done = h.tricks.reduce((a, b) => a + b, 0);
-  const bidderNeeds = Math.max(0, h.bid - h.tricks[h.bidder]);
-  const isBidder = seat === h.bidder;
-  const passerNeeds = !isBidder && h.tricks[seat] < h.settings.passerMinTricks;
-  // a bidder always wants more tricks; the others want one for themselves or to break the bidder
-  const wantWin = isBidder || passerNeeds || (bidderNeeds > 0 && 13 - done >= bidderNeeds);
-
   const table = h.trick.map((t) => t.card);
   const wins = (c) => trickWinner([...table, c], h.trump) === table.length;
   const nonTrump = (list) => list.filter((c) => suitOf(c) !== h.trump);
+  const cleanElAlmaz = (s) => h.elAlmaz.includes(s) && h.tricks[s] === 0;
+
+  // El almaz still clean: lose every trick, getting rid of the highest card that safely loses
+  if (cleanElAlmaz(seat)) {
+    if (table.length === 0) return lowest(legal);
+    const losers = legal.filter((c) => !wins(c));
+    return losers.length ? highest(losers) : lowest(legal);
+  }
+
+  const done = h.tricks.reduce((a, b) => a + b, 0);
+  const bidderNeeds = Math.max(0, h.bid - h.tricks[h.bidder]);
+  const isBidder = seat === h.bidder;
+  const passerNeeds = !isBidder && !h.elAlmaz.includes(seat) && h.tricks[seat] < h.settings.passerMinTricks;
+  // a bidder always wants more tricks; the others want one for themselves or to break the bidder
+  let wantWin = isBidder || passerNeeds || (bidderNeeds > 0 && 13 - done >= bidderNeeds);
+  // a clean El almaz player winning this trick: leave it to them, it breaks their El almaz
+  if (table.length > 0 && cleanElAlmaz(h.trick[trickWinner(table, h.trump)].seat)) wantWin = false;
 
   if (table.length === 0) {
     const masters = legal.filter(isMaster);
@@ -175,35 +200,68 @@ export function zorCard(h, seat, { rng = Math.random, thinkMs = 500 } = {}) {
   return legal[best];
 }
 
-export function zorBid(h, seat, { rng = Math.random, thinkMs = 300 } = {}) {
-  const options = h.bidOptions(seat).filter((o) => typeof o === 'number');
-  if (!options.length) return 'pass';
-  const mine = h.hands[seat];
-  const { suit, estimate } = bestTrump(mine);
-  if (estimate < h.settings.minBid - 2.5) return 'pass';
-  const target = Math.min(13, Math.max(h.settings.minBid, Math.round(estimate)));
-  const unseen = makeDeck().filter((c) => !mine.includes(c));
-  const results = [];
+// Random hands for the three other seats.
+function dealOthers(mine, seat, rng) {
+  const pool = shuffle(makeDeck().filter((c) => !mine.includes(c)), rng);
+  const hands = [];
+  let k = 0;
+  for (let s = 0; s < 4; s++) hands[s] = s === seat ? mine.slice() : pool.slice(13 * k++, 13 * k);
+  return hands;
+}
+
+// Chance of keeping El almaz against the bid on the table, played out over random deals.
+function elAlmazChance(h, seat, rng, thinkMs) {
   const start = now();
   let worlds = 0;
+  let kept = 0;
   do {
-    const pool = shuffle(unseen, rng);
-    const hands = [];
-    let k = 0;
-    for (let s = 0; s < 4; s++) hands[s] = s === seat ? mine.slice() : pool.slice(13 * k++, 13 * k);
-    const c = BatakHand.playing({ dealer: h.dealer, hands, bidder: seat, bid: target, trump: suit, settings: h.settings });
+    const hands = dealOthers(h.hands[seat], seat, rng);
+    const { suit, estimate } = bestTrump(hands[h.highBidder]);
+    const bid = Math.min(13, Math.max(h.highBid, Math.round(estimate)));
+    const c = BatakHand.playing({ dealer: h.dealer, hands, bidder: h.highBidder, bid, trump: suit, settings: h.settings });
+    c.elAlmaz = [seat];
     rollout(c, rng);
-    results.push(c.tricks[seat]);
+    if (c.tricks[seat] === 0) kept++;
     worlds++;
-  } while (worlds < 400 && (worlds < 20 || now() - start < thinkMs));
-  let bestBid = 0;
-  let bestValue = -Infinity;
-  for (const b of options) {
-    let sum = 0;
-    for (const t of results) sum += scoreRound({ bidder: 0, bid: b, tricks: [t, 0, 0, 0] }, h.settings)[0];
-    const value = sum / results.length;
-    if (value > bestValue) { bestValue = value; bestBid = b; }
+  } while (worlds < 300 && (worlds < 20 || now() - start < thinkMs));
+  return kept / worlds;
+}
+
+const PASS_VALUE = 2; // rough average of staying out of a bid
+
+export function zorBid(h, seat, { rng = Math.random, thinkMs = 300 } = {}) {
+  const all = h.bidOptions(seat);
+  const options = all.filter((o) => typeof o === 'number');
+  const mine = h.hands[seat];
+  const { suit, estimate } = bestTrump(mine);
+  let bestBid = 'pass';
+  let bestValue = PASS_VALUE;
+  if (options.length && estimate >= h.settings.minBid - 2.5) {
+    const target = Math.min(13, Math.max(h.settings.minBid, Math.round(estimate)));
+    const results = [];
+    const start = now();
+    let worlds = 0;
+    do {
+      const hands = dealOthers(mine, seat, rng);
+      const c = BatakHand.playing({ dealer: h.dealer, hands, bidder: seat, bid: target, trump: suit, settings: h.settings });
+      rollout(c, rng);
+      results.push(c.tricks[seat]);
+      worlds++;
+    } while (worlds < 400 && (worlds < 20 || now() - start < thinkMs));
+    // a King that comes off wins the whole game
+    if (all.includes('king') && results.filter((t) => t === 13).length / results.length >= 0.5) return 'king';
+    for (const b of options) {
+      let sum = 0;
+      for (const t of results) sum += scoreRound({ bidder: 0, bid: b, tricks: [t, 0, 0, 0] }, h.settings)[0];
+      const value = sum / results.length;
+      if (value > bestValue) { bestValue = value; bestBid = b; }
+    }
   }
-  const PASS_VALUE = 2; // rough average of staying out of a bid
-  return bestValue > PASS_VALUE ? bestBid : 'pass';
+  // El almaz only against a real bid (if everybody passed, the first speaker would be stuck with the bid)
+  if (all.includes('elalmaz') && h.highBidder >= 0 && danger(mine).points < 5) {
+    const p = elAlmazChance(h, seat, rng, thinkMs);
+    const value = h.settings.elAlmazPoints * (2 * p - 1);
+    if (value > bestValue) return 'elalmaz';
+  }
+  return bestBid;
 }

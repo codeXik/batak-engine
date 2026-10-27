@@ -1,5 +1,16 @@
 # Değişiklik kaydı
 
+## 1.2.0 — 27 Ekim 2026
+
+- Yeni: kaydetme ve yükleme (`toJSON` / `fromJSON`, hem tur hem bütün oyun); bozuk kayıt yüklenmez.
+- Yeni: ihale geçmişi (`auction`), biten eller (`history`), son el (`lastTrick`), oyun sıralaması (`standings`), tur özetinde koz ve El almaz.
+- Yeni: oyuncu görünümü `view(koltuk)` (rakiplerin kartları gizli).
+- Yeni: yanlış ayar, yanlış dağıtım ve yanlış dağıtıcı numarası hata verir.
+- Düzeltme: El almaz diyen bilgisayar el almaya çalışıyordu; artık hiç el almamaya çalışır, ötekiler de onun aldığı ele karışmaz.
+- Yeni: bilgisayar (normal, zor) uygun elle El almaz ve King der.
+- Düzeltme: turun kopyasında King'in tutup tutmadığı bilgisi kayboluyordu.
+- Kural değişikliği yok.
+
 ## 1.1.0 — 27 Ekim 2026
 
 - Yeni: `BatakMatch` (bütün oyun: bitiş puanına kadar turlar, dağıtıcı sırayla ilerler, eşitlikte bir tur daha).
