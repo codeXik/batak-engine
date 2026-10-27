@@ -12,7 +12,19 @@ export function makeDeck() {
   return deck;
 }
 
-export function shuffle(deck, rng = Math.random) {
+// Unpredictable random number in [0, 1) from the platform's cryptographic generator (browsers, Node.js 19+).
+// Use it wherever a deal must not be guessable, e.g. on a game server.
+export function secureRandom() {
+  const c = globalThis.crypto;
+  if (!c || typeof c.getRandomValues !== 'function') throw new Error('No cryptographic random generator here');
+  const [hi, lo] = c.getRandomValues(new Uint32Array(2));
+  return ((hi >>> 5) * 67108864 + (lo >>> 6)) / 9007199254740992; // 53 random bits
+}
+
+// The default for dealing: secure when the platform has it.
+export const defaultRandom = () => (globalThis.crypto?.getRandomValues ? secureRandom() : Math.random());
+
+export function shuffle(deck, rng = defaultRandom) {
   const a = deck.slice();
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -26,7 +38,7 @@ export const isBadHand = (hand) => !hand.some((c) => rankOf(c) >= 11);
 
 // Deals 13 cards to each of 4 seats. With redealBadHand on, a deal where any seat
 // holds a bad hand is thrown away and dealt again, up to maxRedeals times in a row.
-export function dealHands(rng = Math.random, settings = {}) {
+export function dealHands(rng = defaultRandom, settings = {}) {
   const { redealBadHand = false, maxRedeals = 3 } = settings;
   let redeals = 0;
   for (;;) {

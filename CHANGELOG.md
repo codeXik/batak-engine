@@ -1,5 +1,14 @@
 # Değişiklik kaydı
 
+## 1.3.0 — 27 Ekim 2026
+
+- Yeni: çevrim içi oyun için tek giriş noktası `act(koltuk, hamle)`; hiç hata fırlatmaz, hata kodu döner.
+- Yeni: hamle numarası (`seq`) ve son hamle (`lastAction`); geç kalan ya da iki kez gelen hamle reddedilir.
+- Yeni: `expects(koltuk)`, `botAction` (bilgisayar hamlesini yapmadan verir), bütün oyun için `view(koltuk)`.
+- Yeni: kartlar varsayılan olarak güvenli (şifreleme düzeyinde) rastgeleyle karıştırılır; `secureRandom` dışa açıldı.
+- Yeni: kayıt yüklenirken tutarlılık denetimi (aşama, sıra, el sayıları, oynanan kartlar).
+- Kural değişikliği yok.
+
 ## 1.2.0 — 27 Ekim 2026
 
 - Yeni: kaydetme ve yükleme (`toJSON` / `fromJSON`, hem tur hem bütün oyun); bozuk kayıt yüklenmez.

@@ -1,4 +1,5 @@
 import { BatakHand } from './hand.js';
+import { defaultRandom } from './cards.js';
 import { withDefaults } from './settings.js';
 
 const SAVE_VERSION = 1;
@@ -6,7 +7,7 @@ const SAVE_VERSION = 1;
 // A whole game: rounds are played until somebody reaches settings.targetScore.
 // The dealer moves one seat per round (the same direction as the play). A successful King wins at once.
 export class BatakMatch {
-  constructor({ settings, rng = Math.random, dealer = 0 } = {}) {
+  constructor({ settings, rng = defaultRandom, dealer = 0 } = {}) {
     if (!Number.isInteger(dealer) || dealer < 0 || dealer > 3) throw new Error('Dealer must be a seat 0..3');
     this.settings = withDefaults(settings);
     this.rng = rng;
@@ -60,6 +61,12 @@ export class BatakMatch {
     return { over: this.over, winner: this.winner, scores: this.scores.slice() };
   }
 
+  // What `seat` is allowed to see of the whole match (the current round through BatakHand.view).
+  view(seat) {
+    const { version, hand, ...pub } = this.toJSON();
+    return { ...pub, seat, over: this.over, standings: this.standings, round: this.rounds.length + (this.counted ? 0 : 1), hand: this.hand && this.hand.view(seat) };
+  }
+
   // Plain object (JSON safe) with the whole match, the round in progress included.
   toJSON() {
     return {
@@ -69,7 +76,7 @@ export class BatakMatch {
     };
   }
 
-  static fromJSON(data, { rng = Math.random } = {}) {
+  static fromJSON(data, { rng = defaultRandom } = {}) {
     if (!data || data.version !== SAVE_VERSION) throw new Error('Unknown save format');
     const m = new BatakMatch({ settings: data.settings, rng, dealer: data.dealer });
     const copy = JSON.parse(JSON.stringify({ scores: data.scores, rounds: data.rounds }));

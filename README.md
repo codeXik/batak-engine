@@ -76,11 +76,32 @@ const kayit = JSON.stringify(oyun);                       // BatakMatch ya da Ba
 const oyun2 = BatakMatch.fromJSON(JSON.parse(kayit));     // tek tur için BatakHand.fromJSON
 ```
 
-Bozuk ya da tutarsız kayıt (aynı kart iki yerde, bilinmeyen biçim) yüklenmez, hata verir.
+Bozuk ya da tutarsız kayıt (aynı kart iki yerde, el sayıları tutmuyor, bilinmeyen biçim) yüklenmez, hata verir. 1.2.0 kayıtları da yüklenir.
 
 ## Oyuncu görünümü
 
 `el.view(koltuk)` yalnız o koltuğun görmesi gerekenleri verir: kendi kartları, ötekilerin kaç kartı kaldığı, yerdeki kartlar, geçmiş, puanlar, atabileceği kartlar ve verebileceği teklifler. Rakiplerin kartları içinde yoktur; arayüz bunu kullanırsa kartlar yanlışlıkla görünmez.
+
+## Çevrim içi oyun (sunucu)
+
+Çevrim içi oyunda motor sunucuda çalışır ve tek yetkili odur. Oyuncular yalnız hamle gönderir; sunucu `el.act` ile hamleyi işler ve her oyuncuya `el.view(koltuk)` (ya da bütün oyun için `oyun.view(koltuk)`) gönderir.
+
+```js
+const sonuc = el.act(koltuk, { type: 'card', value: 'H14', seq: 12 });
+// { ok: true, seq: 13, ... }  ya da  { ok: false, error: 'notYourTurn' }
+```
+
+| Hamle | Biçim |
+| --- | --- |
+| Teklif | `{ type: 'bid', value: 5 }` (ya da `'pass'`, `'elalmaz'`, `'king'`) |
+| Koz | `{ type: 'trump', value: 'S' }` |
+| Kart | `{ type: 'card', value: 'H14' }` |
+
+- `act` hiçbir zaman hata fırlatmaz, sonuç döner. Hata kodları: `badAction` (bozuk mesaj), `stale` (eski durumdan gelen hamle), `gameOver`, `notYourTurn`, `wrongPhase`, `illegal`.
+- **Hamle numarası:** `el.seq` her hamlede bir artar. Hamleyle birlikte oyuncunun gördüğü `seq` gönderilirse geç kalan ya da iki kez gelen hamle `stale` ile reddedilir. Son hamle `el.lastAction`'dadır (ekranda göstermek için).
+- `el.expects(koltuk)` o koltuktan beklenen hamleyi söyler (`'bid'`, `'trump'`, `'card'` ya da `null`).
+- **Güvenli karıştırma:** Kartlar, varsayılan olarak platformun şifreleme düzeyindeki rastgele üreticisiyle karıştırılır (tarayıcılar ve Node.js 19 ve üstü); dağıtım önceden kestirilemez. Aynı üretici `secureRandom` olarak da dışa açıktır. Testlerde tekrarlanabilir dağıtım için `rng` verilebilir.
+- **Kopan oyuncu:** `botAction(el, { level })` bilgisayarın hamlesini yapmadan döner; sunucu süresi dolan oyuncunun yerine bunu `act` ile oynatabilir. Web Worker'da düşünüp hamleyi ana sayfada uygulamak için de kullanılır.
 
 Yanlış ayar (bilinmeyen ad, aralık dışı değer) ve yanlış dağıtım (aynı kart iki kez, geçersiz kart) verilirse motor hata verir.
 

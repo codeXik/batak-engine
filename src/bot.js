@@ -126,12 +126,22 @@ export function botCard(h, seat, { level = 'normal', rng = Math.random, thinkMs 
 
 // Does whatever the seat on turn has to do. Returns false when nothing is expected from a computer.
 export function botStep(h, { level = 'normal', rng = Math.random, thinkMs } = {}) {
-  const seat = h.turn;
-  if (h.phase === 'bidding') h.placeBid(seat, botBid(h, seat, { level, rng, thinkMs }));
-  else if (h.phase === 'trump') h.chooseTrump(seat, botTrump(h, seat));
-  else if (h.phase === 'play') h.playCard(seat, botCard(h, seat, { level, rng, thinkMs }));
-  else return false;
+  const action = botAction(h, { level, rng, thinkMs });
+  if (!action) return false;
+  const r = h.act(h.turn, action);
+  if (!r.ok) throw new Error(`Computer move refused: ${r.error}`);
   return true;
+}
+
+// The action the seat on turn would take, without taking it: { type, value, seq } for BatakHand.act,
+// or null when the round is over. Lets a Web Worker or a server think and apply the move elsewhere.
+export function botAction(h, { level = 'normal', rng = Math.random, thinkMs } = {}) {
+  const seat = h.turn;
+  const type = h.expects(seat);
+  if (type === 'bid') return { type, value: botBid(h, seat, { level, rng, thinkMs }), seq: h.seq };
+  if (type === 'trump') return { type, value: botTrump(h, seat), seq: h.seq };
+  if (type === 'card') return { type, value: botCard(h, seat, { level, rng, thinkMs }), seq: h.seq };
+  return null;
 }
 
 // ---- 'zor' level -------------------------------------------------------------------------------------

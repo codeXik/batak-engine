@@ -1,4 +1,4 @@
-import { SUITS, dealHands, isCard } from './cards.js';
+import { SUITS, dealHands, isCard, defaultRandom } from './cards.js';
 import { legalCards, trickWinner } from './rules.js';
 import { scoreRound } from './scoring.js';
 import { withDefaults } from './settings.js';
@@ -25,7 +25,7 @@ const copyTrick = (t) => ({ leader: t.leader, cards: t.cards.map((x) => ({ ...x 
 // the player to the dealer's right is therefore (dealer + 1) % 4 and speaks first.
 // Phases: 'bidding' -> 'trump' -> 'play' -> 'done'. Every illegal action throws.
 export class BatakHand {
-  constructor({ dealer = 0, hands, rng = Math.random, settings } = {}) {
+  constructor({ dealer = 0, hands, rng = defaultRandom, settings } = {}) {
     if (!Number.isInteger(dealer) || dealer < 0 || dealer > 3) throw new Error('Dealer must be a seat 0..3');
     this.settings = withDefaults(settings);
     this.dealer = dealer;
@@ -59,6 +59,8 @@ export class BatakHand {
     this.king = false; // the bidder declared all 13 tricks
     this.kingMade = false;
     this.scores = null;
+    this.seq = 0; // number of actions taken so far; every bid, trump choice and card adds one
+    this.lastAction = null; // { seq, seat, type, value } of the latest action, for showing it
   }
 
   // Every field except the hands, the settings and the dealer, copied.
@@ -70,6 +72,7 @@ export class BatakHand {
       trick: this.trick.map((t) => ({ ...t })), history: this.history.map(copyTrick), tricks: this.tricks.slice(),
       played: this.played.slice(), plays: this.plays.map((p) => p.slice()), elAlmaz: this.elAlmaz.slice(),
       king: this.king, kingMade: this.kingMade, scores: this.scores && this.scores.slice(),
+      seq: this.seq, lastAction: this.lastAction && { ...this.lastAction },
     };
   }
 
@@ -93,9 +96,24 @@ export class BatakHand {
     // every card must be in exactly one place: a hand, a seat's played cards, or the table
     const all = data.hands.map((h, s) => h.concat(data.plays[s]));
     checkHands(all);
+    const seatOk = (s) => Number.isInteger(s) && s >= 0 && s <= 3;
+    const sum = (a) => a.reduce((x, y) => x + y, 0);
+    const consistent =
+      ['bidding', 'trump', 'play', 'done'].includes(data.phase) && seatOk(data.turn) &&
+      (data.trump === null || SUITS.includes(data.trump)) &&
+      Array.isArray(data.history) && Array.isArray(data.trick) && data.trick.length < 4 &&
+      Array.isArray(data.tricks) && sum(data.tricks) === data.history.length &&
+      data.played.length === sum(data.plays.map((p) => p.length)) &&
+      data.played.length === 4 * data.history.length + data.trick.length &&
+      (data.phase !== 'done' || data.hands.every((x) => x.length === 0)) &&
+      ((data.phase === 'bidding') === (data.bidder === -1)) && ((data.phase === 'play' || data.phase === 'done') === !!data.trump);
+    if (!consistent) throw new Error('Save is inconsistent');
     const h = new BatakHand({ dealer: data.dealer, hands: data.hands, settings: data.settings });
     const { version, settings, dealer, hands, voids, ...rest } = data;
     Object.assign(h, rest, { voids: voids.map((v) => new Set(v)) });
+    // saves from 1.2.0 have no action counter: count the actions they hold
+    if (!Number.isInteger(data.seq)) h.seq = h.auction.length + (h.trump ? 1 : 0) + h.played.length;
+    if (data.lastAction === undefined) h.lastAction = null;
     Object.assign(h, h.#state()); // detach from the caller's arrays
     return h;
   }
@@ -124,6 +142,41 @@ export class BatakHand {
 
   #next(seat) {
     return (seat + 1) % 4;
+  }
+
+  #done(seat, type, value) {
+    this.seq++;
+    this.lastAction = { seq: this.seq, seat, type, value };
+  }
+
+  // The action `seat` may take now: 'bid', 'trump', 'card', or null when it is not that seat's turn.
+  expects(seat = this.turn) {
+    if (this.phase === 'done' || seat !== this.turn) return null;
+    return { bidding: 'bid', trump: 'trump', play: 'card' }[this.phase];
+  }
+
+  // One entry point for actions coming from a player, a network message or a computer:
+  //   { type: 'bid', value: 5 | 'pass' | 'elalmaz' | 'king' }, { type: 'trump', value: 'S' }, { type: 'card', value: 'H14' }
+  // With `seq`, the action is taken only if nothing happened since the sender saw the round (a late or
+  // repeated message is refused). Never throws: returns { ok: true, seq, ... } or { ok: false, error }.
+  // Errors: 'badAction', 'stale', 'gameOver', 'notYourTurn', 'wrongPhase', 'illegal'.
+  act(seat, action) {
+    if (!Number.isInteger(seat) || seat < 0 || seat > 3 || !action || typeof action !== 'object') return { ok: false, error: 'badAction' };
+    const { type, value } = action;
+    if (!['bid', 'trump', 'card'].includes(type)) return { ok: false, error: 'badAction' };
+    if (action.seq !== undefined && action.seq !== this.seq) return { ok: false, error: 'stale' };
+    if (this.phase === 'done') return { ok: false, error: 'gameOver' };
+    if (seat !== this.turn) return { ok: false, error: 'notYourTurn' };
+    if (this.expects(seat) !== type) return { ok: false, error: 'wrongPhase' };
+    try {
+      let result = {};
+      if (type === 'bid') this.placeBid(seat, value);
+      else if (type === 'trump') this.chooseTrump(seat, value);
+      else result = this.playCard(seat, value);
+      return { ok: true, seq: this.seq, ...result };
+    } catch {
+      return { ok: false, error: 'illegal' };
+    }
   }
 
   #active(seat) {
@@ -164,6 +217,7 @@ export class BatakHand {
       this.highBidder = seat;
     }
     this.auction.push({ seat, bid: value });
+    this.#done(seat, 'bid', value);
     this.#advanceBidding();
   }
 
@@ -194,6 +248,7 @@ export class BatakHand {
     this.trump = suit;
     this.phase = 'play';
     this.turn = this.bidder;
+    this.#done(seat, 'trump', suit);
   }
 
   legalCards(seat = this.turn) {
@@ -206,6 +261,7 @@ export class BatakHand {
     if (seat !== this.turn) throw new Error('Not your turn');
     if (!this.hands[seat].includes(card)) throw new Error('You do not hold that card');
     if (!this.legalCards(seat).includes(card)) throw new Error('Illegal card');
+    this.#done(seat, 'card', card);
     if (this.trick.length > 0 && suitOf(card) !== suitOf(this.trick[0].card)) this.voids[seat].add(suitOf(this.trick[0].card));
     this.hands[seat].splice(this.hands[seat].indexOf(card), 1);
     this.plays[seat].push(card);

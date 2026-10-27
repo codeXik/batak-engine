@@ -1,5 +1,11 @@
 # HANDOFF — devam kaydı
 
+## 27 Ekim 2026 — Çevrim içi oyuna hazırlık (1.3.0)
+
+- Kullanıcı: batak98'de de tavla98 ve chesse98'deki gibi çevrim içi oyun olacak. Motor buna göre hazırlandı (tavla98 `server/rooms.js` örnek alındı: sunucu hakem, hata kodu dönen hamleler, hamle numarası).
+- Eklendi: `act`, `seq`, `lastAction`, `expects`, `botAction`, `BatakMatch.view`, güvenli karıştırma, kayıt tutarlılık denetimi. `npm test` 27 test geçti; ayrıca her hamleden sonra kaydedip yükleyerek 2000 oyun hatasız oynatıldı.
+- Sıradaki: batak98 arayüzü ve sunucusu (oda, bağlantı, süre) bu motorla yapılır.
+
 ## 27 Ekim 2026 — Eksikler tamamlandı (1.2.0)
 
 - Eklendi: kaydet/yükle, ihale ve el geçmişi, son el, sıralama, oyuncu görünümü, ayar ve dağıtım denetimi. Bilgisayar El almaz ve King diyor; El almaz hatası düzeltildi. `npm test` 24 test geçti.

@@ -310,6 +310,11 @@ test('save and load: a round and a match go on exactly as before', async () => {
   const broken = JSON.parse(JSON.stringify(a));
   broken.plays[0][0] = broken.plays[1][0];
   assert.throws(() => BatakHand.fromJSON(broken), /twice/);
+  for (const spoil of [(d) => { d.phase = 'x'; }, (d) => { d.tricks[0]++; }, (d) => { d.trump = null; }, (d) => { d.turn = 7; }]) {
+    const d = JSON.parse(JSON.stringify(a));
+    spoil(d);
+    assert.throws(() => BatakHand.fromJSON(d), /inconsistent/);
+  }
 
   const m = new BatakMatch({ rng: seeded(64), settings: { targetScore: 1000 } });
   for (let i = 0; i < 2; i++) {
@@ -360,4 +365,64 @@ test('bot: an El almaz player ducks, declares El almaz with a hopeless hand, say
   const k = new BatakHand({ dealer: 0, hands: [others.slice(0, 13), spades, others.slice(13, 26), others.slice(26)], settings: { king: true } });
   assert.equal(botBid(k, 1), 'king');
   assert.equal(botBid(k, 1, { level: 'zor', rng: seeded(73), thinkMs: 5 }), 'king');
+});
+
+test('secure dealing: crypto numbers in [0, 1), default deals are unpredictable', async () => {
+  const { secureRandom } = await import('../src/cards.js');
+  for (let i = 0; i < 1000; i++) {
+    const x = secureRandom();
+    assert.ok(x >= 0 && x < 1);
+  }
+  const a = new BatakHand().hands.flat().join();
+  const b = new BatakHand().hands.flat().join();
+  assert.notEqual(a, b);
+});
+
+test('act: one entry point that never throws, with error codes and the action counter', async () => {
+  const { botAction } = await import('../src/bot.js');
+  const h = new BatakHand({ dealer: 0, rng: seeded(81), settings: { elAlmaz: true } });
+  assert.equal(h.seq, 0);
+  assert.deepEqual(h.act(9, { type: 'bid', value: 5 }), { ok: false, error: 'badAction' });
+  assert.deepEqual(h.act(1, null), { ok: false, error: 'badAction' });
+  assert.deepEqual(h.act(1, { type: 'jump' }), { ok: false, error: 'badAction' });
+  assert.deepEqual(h.act(2, { type: 'bid', value: 5 }), { ok: false, error: 'notYourTurn' });
+  assert.deepEqual(h.act(1, { type: 'card', value: h.hands[1][0] }), { ok: false, error: 'wrongPhase' });
+  assert.deepEqual(h.act(1, { type: 'bid', value: 4 }), { ok: false, error: 'illegal' });
+  assert.deepEqual(h.act(1, { type: 'bid', value: '5' }), { ok: false, error: 'illegal' });
+  assert.equal(h.seq, 0, 'refused actions change nothing');
+  assert.deepEqual(h.act(1, { type: 'bid', value: 5, seq: 0 }), { ok: true, seq: 1 });
+  assert.deepEqual(h.lastAction, { seq: 1, seat: 1, type: 'bid', value: 5 });
+  assert.deepEqual(h.act(2, { type: 'bid', value: 'pass', seq: 0 }), { ok: false, error: 'stale' }, 'a late message is refused');
+  for (const s of [2, 3, 0]) assert.ok(h.act(s, { type: 'bid', value: 'pass' }).ok);
+  assert.equal(h.expects(1), 'trump');
+  assert.equal(h.expects(2), null);
+  assert.deepEqual(h.act(1, { type: 'trump', value: 'X' }), { ok: false, error: 'illegal' });
+  assert.ok(h.act(1, { type: 'trump', value: 'H' }).ok);
+  let last;
+  while (h.phase !== 'done') {
+    const a = botAction(h);
+    assert.equal(a.type, 'card');
+    last = h.act(h.turn, a);
+    assert.ok(last.ok);
+    assert.deepEqual(h.act(h.turn, a), { ok: false, error: 'stale' }, 'the same message twice is refused');
+  }
+  assert.equal(last.trickDone, true);
+  assert.equal(h.seq, 4 + 1 + 52);
+  assert.equal(botAction(h), null);
+  assert.deepEqual(h.act(0, { type: 'card', value: 'S2' }), { ok: false, error: 'gameOver' });
+
+  const old = h.toJSON();
+  delete old.seq;
+  delete old.lastAction;
+  assert.equal(BatakHand.fromJSON(old).seq, 57, 'saves without a counter still load');
+});
+
+test('match view: scores, standings and the round in progress, other hands hidden', () => {
+  const m = new BatakMatch({ rng: seeded(91) });
+  const h = m.startRound();
+  const v = m.view(2);
+  assert.equal(v.round, 1);
+  assert.equal(v.over, false);
+  assert.deepEqual(v.hand.hand, h.hands[2]);
+  for (const c of h.hands[0]) assert.ok(!JSON.stringify(v).includes(`"${c}"`));
 });
