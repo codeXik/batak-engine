@@ -1,5 +1,11 @@
 # Değişiklik kaydı
 
+## 1.4.0 — 27 Ekim 2026
+
+- Yeni oyun türü **Koz Maça**: ayar `variant: 'kozmaca'`. İhale yok, koz hep maça, tur doğrudan kart atmayla başlar, her alınan el 1 puan (tur başına toplam 13). Varsayılan `variant: 'ihaleli'`; mevcut oyunlar etkilenmez.
+- Bilgisayar (kolay, normal, zor) Koz Maça'yı oynar: herkes her eli almak ister.
+- Kayıt yükleme Koz Maça turlarını da tutarlı sayar.
+
 ## 1.3.1 — 27 Ekim 2026
 
 - README baştan, düzgün Türkçeyle yazıldı; kural belgesindeki kaynak satırı düzeltildi. Kodda değişiklik yok.

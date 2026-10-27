@@ -101,7 +101,8 @@ export function botCard(h, seat, { level = 'normal', rng = Math.random, thinkMs 
   const isBidder = seat === h.bidder;
   const passerNeeds = !isBidder && !h.elAlmaz.includes(seat) && h.tricks[seat] < h.settings.passerMinTricks;
   // a bidder always wants more tricks; the others want one for themselves or to break the bidder
-  let wantWin = isBidder || passerNeeds || (bidderNeeds > 0 && 13 - done >= bidderNeeds);
+  // in Koz Maça (no bidder) every trick is a point, so everybody wants every trick
+  let wantWin = h.settings.variant === 'kozmaca' || isBidder || passerNeeds || (bidderNeeds > 0 && 13 - done >= bidderNeeds);
   // a clean El almaz player winning this trick: leave it to them, it breaks their El almaz
   if (table.length > 0 && cleanElAlmaz(h.trick[trickWinner(table, h.trump)].seat)) wantWin = false;
 

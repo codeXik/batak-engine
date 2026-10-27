@@ -162,6 +162,7 @@ Ayarlar `new BatakHand({ settings: { … } })` ya da `new BatakMatch({ settings:
 | `threeOverBusts` | kapalı | İhalesinden 3 ya da daha fazla el fazla alan da batmış sayılır |
 | `redealBadHand` | kapalı | Kötü gelen elde (hiç as ya da resimli kart yoksa) kartlar yeniden dağıtılır |
 | `maxRedeals` | 3 | Kartların art arda en fazla kaç kez yeniden dağıtılabileceği |
+| `variant` | `'ihaleli'` | Oyun türü: `'ihaleli'` (ihaleli batak) ya da `'kozmaca'` (Koz Maça: ihale yok, koz hep maça, her el 1 puan) |
 | `targetScore` | 51 | Oyunun bitiş puanı |
 | `elAlmaz` | kapalı | İhalede "El almaz" denebilir |
 | `elAlmazPoints` | 50 | "El almaz"ın puanı: tutarsa kazanılır, bozulursa kaybedilir |

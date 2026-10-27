@@ -40,4 +40,12 @@ Kaynaklar: Vikipedi (Batak), joker.games, okeydeyim.net ve masalarda yaygın oyn
 - **King:** 13 teklifidir (ihale hemen biter). 13 eli de alırsa oyunu anında kazanır; alamazsa 13 ihalesi bozulur (−130). Bu uygulamada deklare edilmeden 13 el almanın özel bir sonucu yoktur (kaynaklar bu konuda ayrışıyor).
 - **Oyun bitişi:** Oyun, biri bitiş puanına (varsayılan 51) ulaşınca biter; en yüksek puanlı kazanır, en üstte eşitlik varsa bir tur daha oynanır. Dağıtıcı her turda bir koltuk ilerler.
 
+## Koz Maça (ayar `variant: 'kozmaca'`; 1.4.0)
+
+- İhale yok. Koz her zaman **maça**. Tur doğrudan kart atma aşamasında başlar.
+- İlk kartı dağıtıcının sağındaki oyuncu atar; sonraki ellerde eli kazanan açar. Dağıtıcı her turda bir koltuk ilerler.
+- Kart atma kuralları ihaleli batakla aynı: renge uy, büyüğü geç, rengin yoksa koz at, koz kırılmadan kozla çıkma (istisnalarıyla).
+- Puan: her alınan el 1 puan, her tur toplam 13 puan. Klasik/10 katlı puan sistemi, El almaz ve King bu türde yoktur.
+- Oyun, biri bitiş puanına ulaşınca biter; en üstte eşitlik varsa bir tur daha oynanır.
+
 Açık soru kalmadı.

@@ -24,6 +24,7 @@ const copyTrick = (t) => ({ leader: t.leader, cards: t.cards.map((x) => ({ ...x 
 // One round of batak for 4 seats (0..3). Play goes in increasing seat order (counter-clockwise at the table);
 // the player to the dealer's right is therefore (dealer + 1) % 4 and speaks first.
 // Phases: 'bidding' -> 'trump' -> 'play' -> 'done'. Every illegal action throws.
+// With settings.variant 'kozmaca' there is no auction: spades are trump and the round starts in 'play'.
 export class BatakHand {
   constructor({ dealer = 0, hands, rng = defaultRandom, settings } = {}) {
     if (!Number.isInteger(dealer) || dealer < 0 || dealer > 3) throw new Error('Dealer must be a seat 0..3');
@@ -61,6 +62,14 @@ export class BatakHand {
     this.scores = null;
     this.seq = 0; // number of actions taken so far; every bid, trump choice and card adds one
     this.lastAction = null; // { seq, seat, type, value } of the latest action, for showing it
+    if (this.settings.variant === 'kozmaca') {
+      this.phase = 'play';
+      this.trump = 'S';
+    }
+  }
+
+  get kozmaca() {
+    return this.settings.variant === 'kozmaca';
   }
 
   // Every field except the hands, the settings and the dealer, copied.
@@ -106,7 +115,8 @@ export class BatakHand {
       data.played.length === sum(data.plays.map((p) => p.length)) &&
       data.played.length === 4 * data.history.length + data.trick.length &&
       (data.phase !== 'done' || data.hands.every((x) => x.length === 0)) &&
-      ((data.phase === 'bidding') === (data.bidder === -1)) && ((data.phase === 'play' || data.phase === 'done') === !!data.trump);
+      (data.settings.variant === 'kozmaca' ? data.phase !== 'bidding' && data.phase !== 'trump' && data.trump === 'S' : (data.phase === 'bidding') === (data.bidder === -1)) &&
+      ((data.phase === 'play' || data.phase === 'done') === !!data.trump);
     if (!consistent) throw new Error('Save is inconsistent');
     const h = new BatakHand({ dealer: data.dealer, hands: data.hands, settings: data.settings });
     const { version, settings, dealer, hands, voids, ...rest } = data;
@@ -282,7 +292,7 @@ export class BatakHand {
     if (this.hands.every((x) => x.length === 0)) {
       this.phase = 'done';
       this.kingMade = this.king && this.tricks[this.bidder] === 13;
-      this.scores = scoreRound({ bidder: this.bidder, bid: this.bid, tricks: this.tricks, elAlmaz: this.elAlmaz }, this.settings);
+      this.scores = this.kozmaca ? this.tricks.slice() : scoreRound({ bidder: this.bidder, bid: this.bid, tricks: this.tricks, elAlmaz: this.elAlmaz }, this.settings);
     }
     return { trickDone: true, winner, trick: finished.map((t) => ({ ...t })) };
   }

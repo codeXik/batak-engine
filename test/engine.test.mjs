@@ -426,3 +426,43 @@ test('match view: scores, standings and the round in progress, other hands hidde
   assert.deepEqual(v.hand.hand, h.hands[2]);
   for (const c of h.hands[0]) assert.ok(!JSON.stringify(v).includes(`"${c}"`));
 });
+
+test('Koz Maça: no auction, spades are trump, one point per trick, the dealer\'s right leads', async () => {
+  const { botStep } = await import('../src/bot.js');
+  for (const level of ['kolay', 'normal', 'zor']) {
+    for (let seed = 1; seed <= (level === 'zor' ? 3 : 15); seed++) {
+      const h = new BatakHand({ dealer: seed % 4, rng: seeded(seed), settings: { variant: 'kozmaca' } });
+      assert.equal(h.phase, 'play');
+      assert.equal(h.trump, 'S');
+      assert.equal(h.turn, (h.dealer + 1) % 4);
+      assert.deepEqual(h.bidOptions(h.turn), []);
+      assert.equal(h.act(h.turn, { type: 'bid', value: 5 }).error, 'wrongPhase');
+      while (h.phase === 'play') botStep(h, { level, rng: seeded(seed + 7), thinkMs: 5 });
+      assert.equal(h.phase, 'done');
+      assert.deepEqual(h.scores, h.tricks);
+      assert.equal(h.tricks.reduce((a, b) => a + b, 0), 13);
+      assert.equal(h.kingMade, false);
+    }
+  }
+});
+
+test('Koz Maça: save and load in the middle of a round, and a whole match to the target', async () => {
+  const { botStep } = await import('../src/bot.js');
+  const h = new BatakHand({ dealer: 2, rng: seeded(5), settings: { variant: 'kozmaca' } });
+  for (let i = 0; i < 9; i++) botStep(h, { level: 'normal', rng: seeded(i) });
+  const copy = BatakHand.fromJSON(JSON.parse(JSON.stringify(h.toJSON())));
+  assert.deepEqual(copy.toJSON(), h.toJSON());
+  while (h.phase === 'play') { botStep(h, { rng: seeded(1) }); botStep(copy, { rng: seeded(1) }); }
+  assert.deepEqual(copy.scores, h.scores);
+  const m = new BatakMatch({ settings: { variant: 'kozmaca', targetScore: 20 }, rng: seeded(3) });
+  let guard = 0;
+  while (!m.over && guard++ < 40) {
+    const hand = m.startRound();
+    while (hand.phase === 'play') botStep(hand, { rng: seeded(guard) });
+    m.finishRound();
+  }
+  assert.ok(m.over);
+  assert.ok(Math.max(...m.scores) >= 20);
+  assert.equal(m.rounds.length, m.scores.reduce((a, b) => a + b, 0) / 13);
+  assert.throws(() => withDefaults({ variant: 'eşli' }));
+});

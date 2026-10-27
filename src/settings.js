@@ -1,5 +1,6 @@
 // Every rule that differs between tables is a setting; these are the agreed defaults (docs/KURALLAR.md).
 export const DEFAULT_SETTINGS = {
+  variant: 'ihaleli', // 'ihaleli' (bidding batak) or 'kozmaca' (spades always trump, no bidding, one point per trick)
   minBid: 5,
   allPassBid: 4, // everybody passes: the first bidder gets this bid
   mustOvertake: true, // must beat the best card of the led suit when possible
@@ -19,6 +20,7 @@ export const DEFAULT_SETTINGS = {
 
 const isInt = (x, lo, hi) => Number.isInteger(x) && x >= lo && x <= hi;
 const CHECKS = {
+  variant: (x) => x === 'ihaleli' || x === 'kozmaca',
   minBid: (x) => isInt(x, 1, 13),
   allPassBid: (x) => isInt(x, 1, 13),
   mustOvertake: (x) => typeof x === 'boolean',
