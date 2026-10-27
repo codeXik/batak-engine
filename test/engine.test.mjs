@@ -5,6 +5,7 @@ import { legalCards, trickWinner } from '../src/rules.js';
 import { scoreRound } from '../src/scoring.js';
 import { BatakHand } from '../src/hand.js';
 import { withDefaults } from '../src/settings.js';
+import { BatakMatch } from '../src/match.js';
 
 const S = withDefaults();
 const seeded = (seed) => () => {
@@ -187,4 +188,82 @@ test('bot zor: tracks voids, plays whole games legally with a tiny think time', 
   c.playCard(3, 'C9');
   assert.equal(h.trick.length, 3);
   assert.equal(c.tricks.reduce((a, b) => a + b), 1);
+});
+
+test('El almaz: counts as a pass, +50 when kept, -50 when broken, off by default', () => {
+  const off = new BatakHand({ dealer: 0, rng: seeded(21) });
+  assert.ok(!off.bidOptions(1).includes('elalmaz'));
+  assert.throws(() => off.placeBid(1, 'elalmaz'), /switched off/);
+  const h = new BatakHand({ dealer: 0, rng: seeded(21), settings: { elAlmaz: true } });
+  assert.ok(h.bidOptions(1).includes('elalmaz'));
+  h.placeBid(1, 'elalmaz');
+  h.placeBid(2, 5);
+  h.placeBid(3, 'pass');
+  h.placeBid(0, 'pass');
+  assert.equal(h.phase, 'trump');
+  assert.equal(h.bidder, 2);
+  assert.deepEqual(h.elAlmaz, [1]);
+  const s = { ...S, elAlmaz: true };
+  assert.deepEqual(scoreRound({ bidder: 2, bid: 5, tricks: [3, 0, 7, 3], elAlmaz: [1] }, s), [3, 50, 52, 3]);
+  assert.deepEqual(scoreRound({ bidder: 2, bid: 5, tricks: [3, 1, 6, 3], elAlmaz: [1] }, s), [3, -50, 51, 3]);
+});
+
+test('El almaz: if everybody passes, the forced bidder is no longer El almaz', () => {
+  const h = new BatakHand({ dealer: 0, rng: seeded(22), settings: { elAlmaz: true } });
+  h.placeBid(1, 'elalmaz'); h.placeBid(2, 'pass'); h.placeBid(3, 'pass'); h.placeBid(0, 'pass');
+  assert.equal(h.bidder, 1);
+  assert.equal(h.bid, 4);
+  assert.deepEqual(h.elAlmaz, []);
+});
+
+test('King: bid 13, only when on, ends the auction; made only with all 13 tricks', () => {
+  const off = new BatakHand({ dealer: 0, rng: seeded(31) });
+  assert.throws(() => off.placeBid(1, 'king'), /not possible/);
+  const h = new BatakHand({ dealer: 0, rng: seeded(31), settings: { king: true } });
+  assert.ok(h.bidOptions(1).includes('king'));
+  h.placeBid(1, 7);
+  h.placeBid(2, 'king');
+  assert.equal(h.phase, 'trump');
+  assert.equal(h.bidder, 2);
+  assert.equal(h.bid, 13);
+  assert.equal(h.king, true);
+  assert.deepEqual(scoreRound({ bidder: 2, bid: 13, tricks: [0, 0, 13, 0] }, S), [-13, -13, 130, -13]);
+});
+
+test('match: rounds until the target, dealer rotates, a tie at the top plays on, King wins at once', () => {
+  const match = new BatakMatch({ rng: seeded(41), settings: { targetScore: 51 } });
+  const fakeRound = (scores, king = false) => {
+    const h = match.startRound();
+    Object.assign(h, { phase: 'done', scores, bidder: 0, bid: 5, tricks: [5, 3, 3, 2], kingMade: king });
+    return match.finishRound();
+  };
+  assert.equal(match.dealer, 0);
+  assert.equal(fakeRound([20, 5, 3, 1]).over, false);
+  assert.equal(match.dealer, 1);
+  assert.equal(fakeRound([20, 5, 3, 1]).over, false);
+  const tie = fakeRound([20, 50, 0, 0]);
+  assert.equal(tie.over, false, 'two seats tied on 60 at the top play on');
+  const end = fakeRound([5, 0, 0, 0]);
+  assert.deepEqual([end.over, end.winner], [true, 0]);
+  assert.throws(() => match.startRound(), /over/);
+  const m2 = new BatakMatch({ rng: seeded(42), settings: { king: true } });
+  const h2 = m2.startRound();
+  Object.assign(h2, { phase: 'done', scores: [-13, 130, -13, -13], bidder: 1, bid: 13, tricks: [0, 13, 0, 0], kingMade: true });
+  assert.deepEqual(m2.finishRound().winner, 1);
+});
+
+test('match: whole matches of bots (including El almaz and King on) finish', async () => {
+  const { botStep } = await import('../src/bot.js');
+  for (let g = 1; g <= 5; g++) {
+    const rng = seeded(3000 + g);
+    const match = new BatakMatch({ rng, settings: { elAlmaz: g % 2 === 0, king: true, redealBadHand: true } });
+    let rounds = 0;
+    while (!match.over && rounds++ < 100) {
+      const h = match.startRound();
+      while (h.phase !== 'done') botStep(h, { level: g % 3 ? 'normal' : 'kolay', rng });
+      match.finishRound();
+    }
+    assert.ok(match.over, 'match must end');
+    assert.ok(match.scores[match.winner] === Math.max(...match.scores) || match.rounds.at(-1).king);
+  }
 });

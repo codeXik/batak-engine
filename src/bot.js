@@ -49,7 +49,7 @@ export function botBid(h, seat, { level = 'normal', rng = Math.random, thinkMs =
   if (level === 'zor') return zorBid(h, seat, { rng, thinkMs });
   const { estimate } = bestTrump(h.hands[seat]);
   const n = Math.floor(estimate + 0.5) - (level === 'kolay' ? 1 : 0);
-  const options = h.bidOptions(seat).filter((o) => o !== 'pass');
+  const options = h.bidOptions(seat).filter((o) => typeof o === 'number');
   const next = options[0];
   return next !== undefined && n >= next ? next : 'pass';
 }
@@ -176,7 +176,7 @@ export function zorCard(h, seat, { rng = Math.random, thinkMs = 500 } = {}) {
 }
 
 export function zorBid(h, seat, { rng = Math.random, thinkMs = 300 } = {}) {
-  const options = h.bidOptions(seat).filter((o) => o !== 'pass');
+  const options = h.bidOptions(seat).filter((o) => typeof o === 'number');
   if (!options.length) return 'pass';
   const mine = h.hands[seat];
   const { suit, estimate } = bestTrump(mine);

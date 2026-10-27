@@ -1,4 +1,4 @@
-# batak98 — kural belgesi (27 Ekim 2026)
+# Batak kural belgesi (27 Ekim 2026)
 
 Kaynaklar: Vikipedi (Batak), joker.games, okeydeyim.net ve masalarda yaygın oynanan kurallar; proje sahibinin kararlarıyla birleştirildi. Resmî kural kitabı yoktur; ayrıntılar masadan masaya değiştiği için **bütün varsayılanlar ayardan değişir**. Kural kontrolü, ihale ve puanlama ayrı modüller olur.
 
@@ -33,5 +33,11 @@ Kaynaklar: Vikipedi (Batak), joker.games, okeydeyim.net ve masalarda yaygın oyn
 
 ## Motor testleri
 13 kart/oyuncu, aynı kart iki kez oynanmaz, sıra doğru ilerler, 13 el oynanır, 52 kart biter, seçilen puan sistemi uygulanır; tavla98 gibi rastgele tam oyun testi.
+
+## El almaz, King, oyun bitişi (ayar, varsayılan kapalı; 1.1.0)
+
+- **El almaz:** İhale sırasında teklif yerine "El almaz" denebilir; ihalede pas sayılır. Hiç el almazsa +50, bir el bile alırsa −50. İhaleyi almayanlara uygulanan "en az 1 el" kuralı bu oyuncuya uygulanmaz. Herkes pas geçerse ihale zorunlu olarak ilk konuşana kalacağı için o oyuncunun "El almaz"ı geçersiz olur.
+- **King:** 13 teklifidir (ihale hemen biter). 13 eli de alırsa oyunu anında kazanır; alamazsa 13 ihalesi bozulur (−130). Bu uygulamada deklare edilmeden 13 el almanın özel bir sonucu yoktur (kaynaklar bu konuda ayrışıyor).
+- **Oyun bitişi:** Oyun, biri bitiş puanına (varsayılan 51) ulaşınca biter; en yüksek puanlı kazanır, en üstte eşitlik varsa bir tur daha oynanır. Dağıtıcı her turda bir koltuk ilerler.
 
 Açık soru kalmadı.

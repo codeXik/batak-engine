@@ -11,7 +11,10 @@ export const DEFAULT_SETTINGS = {
   threeOverBusts: false, // bidder who takes bid + 3 or more also fails
   redealBadHand: false,
   maxRedeals: 3,
-  targetScore: 51,
+  targetScore: 51, // a match ends when somebody reaches this
+  elAlmaz: false, // a player may declare no tricks instead of bidding
+  elAlmazPoints: 50, // plus when kept, minus when broken
+  king: false, // a bidder may declare all 13 tricks (bid 13): made = wins the match
 };
 
 export const withDefaults = (settings = {}) => ({ ...DEFAULT_SETTINGS, ...settings });

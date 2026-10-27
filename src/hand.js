@@ -34,6 +34,9 @@ export class BatakHand {
     this.played = [];
     this.plays = [[], [], [], []]; // cards each seat has played so far (public)
     this.voids = [new Set(), new Set(), new Set(), new Set()]; // suits a seat showed it does not have (public)
+    this.elAlmaz = []; // seats that declared no tricks (they are passers in the auction)
+    this.king = false; // the bidder declared all 13 tricks
+    this.kingMade = false;
     this.scores = null;
   }
 
@@ -43,7 +46,7 @@ export class BatakHand {
     Object.assign(c, {
       phase: this.phase, turn: this.turn, firstBidder: this.firstBidder, bids: this.bids.slice(),
       highBid: this.highBid, highBidder: this.highBidder, bidder: this.bidder, bid: this.bid,
-      trump: this.trump, trumpBroken: this.trumpBroken, redeals: this.redeals,
+      trump: this.trump, trumpBroken: this.trumpBroken, redeals: this.redeals, elAlmaz: this.elAlmaz.slice(), king: this.king,
       trick: this.trick.map((t) => ({ ...t })), tricks: this.tricks.slice(), played: this.played.slice(),
       plays: this.plays.map((p) => p.slice()), voids: this.voids.map((v) => new Set(v)),
       scores: this.scores && this.scores.slice(),
@@ -70,7 +73,9 @@ export class BatakHand {
     if (this.phase !== 'bidding' || seat !== this.turn) return [];
     const from = Math.max(this.settings.minBid, this.highBid + 1);
     const out = ['pass'];
+    if (this.settings.elAlmaz) out.push('elalmaz');
     for (let n = from; n <= 13; n++) out.push(n);
+    if (this.settings.king && this.highBid < 13) out.push('king');
     return out;
   }
 
@@ -79,6 +84,16 @@ export class BatakHand {
     if (seat !== this.turn) throw new Error('Not your turn to bid');
     if (value === 'pass') {
       this.bids[seat] = 'pass';
+    } else if (value === 'elalmaz') {
+      if (!this.settings.elAlmaz) throw new Error('El almaz is switched off');
+      this.bids[seat] = 'pass';
+      this.elAlmaz.push(seat);
+    } else if (value === 'king') {
+      if (!this.settings.king || this.highBid >= 13) throw new Error('King is not possible');
+      this.bids[seat] = 13;
+      this.highBid = 13;
+      this.highBidder = seat;
+      this.king = true;
     } else {
       if (!Number.isInteger(value) || value < Math.max(this.settings.minBid, this.highBid + 1) || value > 13) {
         throw new Error('Illegal bid');
@@ -99,6 +114,7 @@ export class BatakHand {
       // everybody passed: the first bidder is stuck with the base bid
       this.bidder = this.firstBidder;
       this.bid = this.settings.allPassBid;
+      this.elAlmaz = this.elAlmaz.filter((x) => x !== this.bidder); // the forced bidder cannot also be El almaz
     } else {
       let s = this.#next(this.turn);
       while (!this.#active(s)) s = this.#next(s);
@@ -146,7 +162,8 @@ export class BatakHand {
     this.turn = winner;
     if (this.played.length === 52) {
       this.phase = 'done';
-      this.scores = scoreRound({ bidder: this.bidder, bid: this.bid, tricks: this.tricks }, this.settings);
+      this.kingMade = this.king && this.tricks[this.bidder] === 13;
+      this.scores = scoreRound({ bidder: this.bidder, bid: this.bid, tricks: this.tricks, elAlmaz: this.elAlmaz }, this.settings);
     }
     return { trickDone: true, winner, trick: finished };
   }
