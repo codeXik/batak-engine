@@ -196,6 +196,8 @@ Testler kural parçalarını, rastgele oynanan tam turları, bütün oyunları, 
 
 MIT lisansı, © 2026 Skynon Labs Ltd. Motoru kullanan uygulamaların motorun adını (örneğin "Hakkında" ekranında) anması rica edilir; zorunlu değildir.
 
+Bu motor [batak98](https://skynonlabs.com/browser-extensions/batak98/) eklentisinde kullanılır.
+
 ---
 
-*English:* A dependency-free rules engine and computer player for Turkish Batak (a 4-player bidding trick-taking card game). Written in plain JavaScript modules, it runs in browsers and in Node.js. MIT licensed. See the code examples above.
+*English:* A dependency-free rules engine and computer player for Turkish Batak (a 4-player bidding trick-taking card game). Written in plain JavaScript modules, it runs in browsers and in Node.js. MIT licensed. See the code examples above. It powers the [batak98](https://skynonlabs.com/browser-extensions/batak98/) browser extension.

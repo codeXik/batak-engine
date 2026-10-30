@@ -1,5 +1,9 @@
 # Değişiklik kaydı
 
+## 1.5.1 — 30 Ekim 2026
+
+- README'nin sonuna motorun hangi eklentide kullanıldığı yazıldı (batak98). Kodda değişiklik yok.
+
 ## 1.5.0 — 27 Ekim 2026
 
 - Yeni oyun türü **Eşli Batak**: ayar `variant: 'esli'`. Karşılıklı koltuklar eş (0+2 ve 1+3), ihaleli oynanır, puan takım toplamıdır (ihaleci takım eşiyle birlikte ihale kadar el almalı; rakip takım için "en az 1 el" takım olarak sayılır). El almaz ve King bu türde yok.
